@@ -1,0 +1,6 @@
+*** Begin Patch
+*** Update File: nursery-system/backend/seed.py
+@@
+-        print("?o" Admin user created successfully!")
++        print("Admin user created successfully!")
+*** End Patch

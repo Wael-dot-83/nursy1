@@ -1,0 +1,35 @@
+# Project-level ignores
+.DS_Store
+Thumbs.db
+ehthumbs.db
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+
+# Virtual environments
+.venv/
+venv/
+ENV/
+
+# Node / frontend builds
+node_modules/
+dist/
+.vite/
+
+# Databases and local storage
+*.db
+*.sqlite
+*.sqlite3
+storage/
+
+# Environment & secrets
+.env
+.env.*
+!.env.example
+
+# Logs and temp files
+*.log
+temp_patch.txt
+~$*

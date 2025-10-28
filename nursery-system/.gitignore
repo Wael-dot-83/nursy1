@@ -1,0 +1,41 @@
+#-*- mode: gitignore -*-
+
+# Environments
+.env
+.env.*
+!.env.example
+
+# Database files
+*.db
+*.sqlite
+*.sqlite3
+nursery.db
+storage/*.db
+
+# Python
+*.py[cod]
+*$py.class
+
+# Pyenv
+.python-version
+
+# Venv
+.venv
+venv/
+ENV/
+
+# Node
+node_modules/
+dist/
+
+# Logs
+*.log
+
+# OS generated files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+Thumbs.db
+ehthumbs.db
