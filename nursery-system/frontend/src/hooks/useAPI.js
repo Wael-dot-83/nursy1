@@ -1,14 +1,14 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'react-hot-toast';
-import * as authAPI from './api/auth';
-import * as nurseryAPI from './api/nursery';
-import * as userAPI from './api/user';
-import * as childrenAPI from './api/children';
-import * as attendanceAPI from './api/attendance';
-import * as reportsAPI from './api/reports';
-import * as fileAPI from './api/file';
-import * as notificationsAPI from './api/notifications';
-import * as adminAPI from './api/admin';
+import * as authAPI from '../lib/api/auth';
+import * as nurseryAPI from '../lib/api/nursery';
+import * as userAPI from '../lib/api/user';
+import * as childrenAPI from '../lib/api/children';
+import * as attendanceAPI from '../lib/api/attendance';
+import * as reportsAPI from '../lib/api/reports';
+import * as fileAPI from '../lib/api/file';
+import * as notificationsAPI from '../lib/api/notifications';
+import * as adminAPI from '../lib/api/admin';
 
 // Authentication hooks
 export const useLogin = () => {

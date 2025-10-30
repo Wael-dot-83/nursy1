@@ -54,6 +54,8 @@ function ReportCard({ title, description, icon, onClick, isLoading }) {
 }
 
 function ReportFilters({ filters, onFiltersChange, nurseries }) {
+  const safeNurseries = Array.isArray(nurseries) ? nurseries : [];
+
   return (
     <div className="card">
       <h3 className="mb-4 font-medium text-slate-800">تصفية التقارير</h3>
@@ -84,7 +86,7 @@ function ReportFilters({ filters, onFiltersChange, nurseries }) {
             className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none"
           >
             <option value="">جميع الحضانات</option>
-            {nurseries?.map(nursery => (
+            {safeNurseries.map(nursery => (
               <option key={nursery.id} value={nursery.id}>{nursery.name}</option>
             ))}
           </select>
@@ -252,7 +254,7 @@ export default function Reports() {
     governorate: '',
   });
 
-  const { data: nurseries } = useQuery({
+  const { data: rawNurseries } = useQuery({
     queryKey: ['nurseries'],
     queryFn: async () => {
       const response = await apiClient.get('/admin/nurseries');
@@ -260,10 +262,19 @@ export default function Reports() {
     },
   });
 
+  const nurseryCandidates = [
+    rawNurseries,
+    rawNurseries?.data,
+    rawNurseries?.nurseries,
+    rawNurseries?.items,
+    rawNurseries?.results,
+  ];
+  const nurseries = nurseryCandidates.find(Array.isArray) ?? [];
+
   const { data: analytics } = useQuery({
     queryKey: ['admin-analytics'],
     queryFn: async () => {
-      const response = await apiClient.get('/admin/analytics');
+      const response = await apiClient.get('/system/analytics');
       return response.data;
     },
   });

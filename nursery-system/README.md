@@ -15,30 +15,73 @@ A comprehensive web-based childcare management system designed for Jordanian nur
 - **Comprehensive Reporting**: Analytics and insights
 
 ### Technical Features
-- **Secure Authentication**: JWT tokens with OTP verification
+- **Secure Authentication**: JWT tokens with OTP verification and refresh tokens
 - **Arabic Language Support**: RTL interface and localization
 - **Responsive Design**: Mobile-friendly web interface
-- **Real-time Notifications**: SMS and in-app notifications
-- **File Storage**: Local and cloud storage options
-- **Database Migrations**: Automated schema management
-- **API Documentation**: Auto-generated OpenAPI docs
+- **Real-time Notifications**: SMS (Twilio) and email (SMTP) notifications
+- **File Storage**: Local and cloud storage options with size/type validation
+- **Database Migrations**: Automated schema management with Alembic
+- **API Documentation**: Auto-generated OpenAPI docs with Swagger/ReDoc
+- **Rate Limiting**: DDoS protection with configurable limits
+- **Audit Logging**: Comprehensive activity tracking for compliance
+- **File Upload**: Secure document management with validation
+- **Notification System**: In-app notifications with SMS/email integration
+
+## 🆕 Recent Updates
+
+### Version 1.0.0 Features
+- **Enhanced Security**: JWT refresh tokens, improved OTP system
+- **Rate Limiting**: Configurable API rate limits with SlowAPI
+- **Audit Logging**: Complete activity tracking for compliance
+- **File Management**: Secure upload/download with validation
+- **Notification System**: In-app notifications with external integrations
+- **Improved Settings**: Centralized configuration with Pydantic settings
+- **Better Logging**: Structured logging with configurable levels
+- **Database Optimization**: Improved indexes and relationships
+- **Rate Limiting**: DDoS protection with configurable limits
+- **Audit Logging**: Comprehensive activity tracking for compliance
+- **Notification System**: In-app notifications with SMS/email integration
 
 ## Quick Start
 
 ### Prerequisites
-- Python 3.11+
+- Python 3.11+ (3.13 recommended for latest features)
 - Node.js 18+ (npm included)
 - Git
+- MySQL 8.0+ (optional, SQLite for development)
 
 ### Backend Setup
 ```bash
 cd backend
-python -m venv .venv
-.venv\\Scripts\\activate  # On macOS/Linux use: source .venv/bin/activate
+python -m venv venv
+venv\Scripts\activate  # On macOS/Linux use: source venv/bin/activate
 pip install -r requirements.txt
-cp .env.example .env
-python seed_demo.py
+cp .env.example .env  # Configure your environment variables
+python seed_db.py     # Initialize database with demo data
 uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
+```
+
+### Environment Configuration
+Create a `.env` file in the backend directory with the following required variables:
+
+```bash
+# Security (Generate strong random keys)
+SECRET_KEY="your-32-character-secret-key-here"
+JWT_ACCESS_SECRET="your-32-character-jwt-access-secret"
+JWT_REFRESH_SECRET="your-32-character-jwt-refresh-secret"
+
+# Database
+DATABASE_URL="sqlite:///./nursery.db"  # or mysql://user:pass@host/db
+
+# Optional Services
+SMS_TWILIO_SID="your-twilio-sid"
+SMS_TWILIO_TOKEN="your-twilio-token"
+SMS_TWILIO_PHONE="+1234567890"
+
+SMTP_HOST="smtp.gmail.com"
+SMTP_PORT=587
+SMTP_USER="your-email@gmail.com"
+SMTP_PASSWORD="your-app-password"
 ```
 
 ### Frontend Setup
@@ -60,10 +103,10 @@ docker run --rm -p 5173:5173 --env-file frontend/.env nursery-frontend
 ```
 
 ### Demo Accounts
-- **Admin** � admin@nursery.com / admin123
-- **Manager** � manager@nursery.com / manager123
-- **Supervisor** � supervisor@nursery.com / supervisor123
-- **Parent** � parent@nursery.com / parent123
+- **Admin** � admin@nursery.com / admin123
+- **Manager** � manager@nursery.com / manager123
+- **Supervisor** � supervisor@nursery.com / supervisor123
+- **Parent** � parent@nursery.com / parent123
 
 After the backend and frontend are running you can sign in with any of the
 credentials above and start exploring the dashboards seeded with demo data.
@@ -120,27 +163,51 @@ POST /auth/refresh         # Refresh token
 
 ### Key API Endpoints
 ```http
+# Authentication
+POST /auth/login           # User login
+POST /auth/otp/request     # Request OTP
+POST /auth/otp/verify      # Verify OTP
+POST /auth/refresh         # Refresh token
+
 # Admin
 GET  /admin/nurseries      # List nurseries
 POST /admin/nurseries      # Create nursery
 GET  /admin/users          # List users
 POST /admin/users          # Create user
 
-# Manager
-GET  /manager/children     # List children
-POST /manager/children     # Register child
-GET  /manager/reports      # View reports
-POST /manager/reports      # Approve reports
+# Users
+GET  /users                # List users
+POST /users                # Create user
+GET  /users/{id}           # Get user details
+PUT  /users/{id}           # Update user
 
-# Supervisor
-POST /supervisor/attendance # Record attendance
-POST /supervisor/reports    # Create daily report
-GET  /supervisor/children   # Assigned children
+# Children
+GET  /children             # List children
+POST /children             # Register child
+GET  /children/{id}        # Get child details
+PUT  /children/{id}        # Update child
 
-# Parent
-GET  /parent/children      # My children
-GET  /parent/reports       # Daily reports
-POST /parent/appointments  # Schedule appointment
+# Attendance
+POST /attendance/checkin    # Check-in child
+POST /attendance/checkout   # Check-out child
+GET  /attendance/{child_id} # Get attendance history
+
+# Reports
+GET  /reports              # List daily reports
+POST /reports              # Create daily report
+GET  /reports/{id}         # Get report details
+
+# Files
+POST /files/upload         # Upload file
+GET  /files/{id}           # Download file
+DELETE /files/{id}         # Delete file
+
+# Notifications
+GET  /notifications        # List notifications
+POST /notifications        # Send notification
+
+# Audit Logs
+GET  /audit-logs           # List audit logs
 ```
 
 ### API Documentation Access
@@ -151,77 +218,89 @@ POST /parent/appointments  # Schedule appointment
 ## 🗄 Database Schema
 
 ### Core Tables
-- **users**: System users with roles
-- **nurseries**: Childcare facilities
-- **branches**: Physical locations
-- **classes**: Age groups/classrooms
-- **children**: Registered children
-- **daily_reports**: Activity logs
-- **attendance**: Check-in/check-out records
-- **appointments**: Scheduled meetings
-- **documents**: File attachments
+- **users**: System users with roles (admin, manager, supervisor, parent)
+- **nurseries**: Childcare facilities with address and age range info
+- **branches**: Physical locations within nurseries
+- **classrooms**: Age groups/classrooms within branches
+- **children**: Registered children with parent and classroom relationships
+- **attendance**: Check-in/check-out records with timestamps
+- **daily_reports**: Activity logs and progress tracking
+- **file_assets**: Secure document and media storage
+- **otp_requests**: One-time password verification system
+- **refresh_tokens**: JWT refresh token management
+- **notifications**: In-app notification system
+- **audit_logs**: Comprehensive activity tracking for compliance
 
 ### Relationships
 ```
 Nursery (1) ──── (M) Branch
     │                   │
-    ├─── (M) Class      ├─── (M) Class
+    ├─── (M) User       ├─── (M) Classroom
     │                   │
-    └─── (M) User       └─── (M) User
+    └─── (M) Child      └─── (M) Child
                         │
-                        ├─── (M) Child
+                        ├─── (M) Attendance
                         │
                         └─── (M) DailyReport
 ```
+
+### Key Indexes
+- User roles and nursery associations
+- Child-parent and classroom relationships
+- Attendance records by child and date
+- Audit logs by user, action, and resource
+- OTP and refresh token expiration tracking
 
 ## ⚙ Configuration
 
 ### Environment Variables
 
-#### Database Configuration
+#### Required Settings
 ```bash
-# SQLite (Development)
+# Security (32+ characters each)
+SECRET_KEY="your-32-character-secret-key-here"
+JWT_ACCESS_SECRET="your-32-character-jwt-access-secret"
+JWT_REFRESH_SECRET="your-32-character-jwt-refresh-secret"
+
+# Database
 DATABASE_URL="sqlite:///./nursery.db"
-
-# MySQL (Production)
-MYSQL_HOST="localhost"
-MYSQL_DB="nurserydb"
-MYSQL_USER="nursery_user"
-MYSQL_PASSWORD="secure_password"
+# Or for MySQL: DATABASE_URL="mysql://user:password@host:port/database"
 ```
 
-#### Security Configuration
-```bash
-SECRET_KEY="your-32-character-secret-key"
-JWT_EXPIRE_MINUTES=1440
-OTP_EXPIRE_MINUTES=5
-```
-
-#### External Services
+#### Optional Services
 ```bash
 # SMS Service (Twilio)
-TWILIO_ACCOUNT_SID="your_sid"
-TWILIO_AUTH_TOKEN="your_token"
-TWILIO_PHONE_NUMBER="+1234567890"
+SMS_TWILIO_SID="your-twilio-account-sid"
+SMS_TWILIO_TOKEN="your-twilio-auth-token"
+SMS_TWILIO_PHONE="+1234567890"
 
 # Email Service (SMTP)
-SMTP_SERVER="smtp.gmail.com"
+SMTP_HOST="smtp.gmail.com"
 SMTP_PORT=587
-SMTP_USERNAME="your-email@gmail.com"
+SMTP_USER="your-email@gmail.com"
 SMTP_PASSWORD="your-app-password"
-
-# File Storage (AWS S3)
-AWS_ACCESS_KEY_ID="your_key"
-AWS_SECRET_ACCESS_KEY="your_secret"
-AWS_S3_BUCKET="nursery-files"
+SMTP_FROM_EMAIL="noreply@nursery.com"
 ```
 
-### Application Settings
+#### File Storage & Limits
+```bash
+FILES_BASE_DIR="./storage"
+MAX_FILE_SIZE=10485760
+ALLOWED_MIME_TYPES="image/jpeg,image/png,image/gif,image/webp,application/pdf"
+```
+
+#### Application Settings
 ```bash
 APP_NAME="Nursery Management System"
+VERSION="1.0.0"
 DEBUG=true
+CORS_ORIGINS="http://localhost:5173,http://localhost:3000"
 LOG_LEVEL="INFO"
-CORS_ORIGINS=["http://localhost:5173", "http://localhost:3000"]
+LOG_FILE="./logs/app.log"
+
+# Rate Limiting
+RATE_LIMIT_PER_MINUTE=60
+AUTH_RATE_LIMIT_PER_MINUTE=5
 ```
 
 ## 🧪 Testing
@@ -308,71 +387,94 @@ tar -czf uploads_backup_$(date +%Y%m%d).tar.gz uploads/
 ## 🔒 Security Features
 
 ### Authentication & Authorization
-- JWT token-based authentication
+- JWT token-based authentication with access and refresh tokens
 - OTP verification for enhanced security
-- Role-based access control (RBAC)
+- Role-based access control (RBAC) with granular permissions
 - Password hashing with bcrypt
-- Token expiration and refresh
+- Token expiration and secure refresh mechanisms
 
 ### Data Protection
-- Input validation with Pydantic
-- SQL injection prevention
-- XSS protection through sanitization
-- CORS configuration
-- Rate limiting on API endpoints
+- Input validation with Pydantic schemas
+- SQL injection prevention with SQLAlchemy ORM
+- XSS protection through input sanitization
+- CORS configuration with origin validation
+- Rate limiting on API endpoints (configurable per endpoint)
+- File upload validation with size and type restrictions
 
 ### Privacy & Compliance
 - Data encryption at rest
-- Secure file storage
-- Audit logging for sensitive operations
-- GDPR-compliant data handling
+- Secure file storage with access controls
+- Comprehensive audit logging for all sensitive operations
+- GDPR-compliant data handling practices
+- Secure OTP and token management with expiration
 
 ## 🐛 Troubleshooting
 
 ### Common Issues
 
+#### Python Version Compatibility
+```bash
+# Check Python version (recommended: 3.11-3.12)
+python --version
+
+# If using Python 3.13, you may experience server startup issues
+# Downgrade to Python 3.11 or 3.12 for stable operation
+```
+
 #### Database Connection Failed
 ```bash
-# Check MySQL service
+# Check database service status
+# For SQLite: Check file permissions
+ls -la nursery.db
+
+# For MySQL: Check service status
 sudo systemctl status mysql
 
 # Test connection
 mysql -u root -p -e "SELECT 1;"
 
 # Check environment variables
-cat .env | grep MYSQL
+cat .env | grep DATABASE_URL
 ```
 
 #### Application Won't Start
 ```bash
-# Check Python version
-python --version
-
-# Check dependencies
+# Check Python dependencies
 pip list | grep fastapi
 
 # Check port availability
 netstat -tlnp | grep :8000
+
+# Check log files
+tail -f logs/app.log
+
+# Verify environment variables
+python -c "from app.settings import settings; print('Settings loaded successfully')"
 ```
 
-#### Frontend Build Issues
+#### Rate Limiting Issues
 ```bash
-# Clear cache and reinstall
-rm -rf node_modules package-lock.json
-npm install
+# Check rate limit settings in .env
+cat .env | grep RATE_LIMIT
 
-# Check Node.js version
-node --version
-npm --version
+# Monitor rate limit headers in API responses
+curl -I http://localhost:8000/
+
+# Adjust limits if needed
+RATE_LIMIT_PER_MINUTE=100
+AUTH_RATE_LIMIT_PER_MINUTE=10
 ```
 
 #### File Upload Issues
 ```bash
 # Check upload directory permissions
-ls -la uploads/
+ls -la storage/uploads/
 
-# Check file size limits in nginx
-grep client_max_body_size /etc/nginx/nginx.conf
+# Check file size limits
+cat .env | grep MAX_FILE_SIZE
+
+# Verify allowed file types
+cat .env | grep ALLOWED_MIME_TYPES
 ```
 
 ### Debug Mode

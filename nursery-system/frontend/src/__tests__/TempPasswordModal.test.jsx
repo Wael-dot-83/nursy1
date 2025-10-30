@@ -1,29 +1,33 @@
-import { render, screen, fireEvent } from '@testing-library/react';
-import TempPasswordModal from '../components/TempPasswordModal';
+﻿import { render, screen, fireEvent } from "@testing-library/react";
+import { vi } from "vitest";
+import TempPasswordModal from "../components/TempPasswordModal";
 
-describe('TempPasswordModal', () => {
-  it('shows temp password and allows reveal/copy', () => {
+describe("TempPasswordModal", () => {
+  it("shows temp password and allows reveal/copy", () => {
     render(
       <TempPasswordModal
-        open={true}
+        open
         onClose={() => {}}
-        user={{ email: 'manager@example.com' }}
+        user={{ email: "manager@example.com" }}
         tempPassword="Abc123XyZ9"
       />
     );
-    expect(screen.getByText('تم إنشاء المدير')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('manager@example.com')).toBeInTheDocument();
-    expect(screen.getByDisplayValue('Abc123XyZ9')).toBeInTheDocument();
-    // Password is masked by default
-    expect(screen.getByLabelText('كلمة المرور المؤقتة:')).toBeTruthy();
-    // Reveal button toggles password
-    fireEvent.click(screen.getByText('إظهار'));
-    expect(screen.getByDisplayValue('Abc123XyZ9')).toHaveAttribute('type', 'text');
-    // Copy button copies password
+
+    expect(screen.getByText("تم إنشاء المدير")).toBeInTheDocument();
+    expect(screen.getByText("manager@example.com")).toBeInTheDocument();
+
+    const passwordInput = screen.getByDisplayValue("Abc123XyZ9");
+    expect(passwordInput).toHaveAttribute("type", "password");
+
+    fireEvent.click(screen.getByText("إظهار"));
+    expect(passwordInput).toHaveAttribute("type", "text");
+
+    const writeText = vi.fn();
     Object.assign(navigator, {
-      clipboard: { writeText: jest.fn() }
+      clipboard: { writeText },
     });
-    fireEvent.click(screen.getByText('نسخ كلمة المرور'));
-    expect(navigator.clipboard.writeText).toHaveBeenCalledWith('Abc123XyZ9');
+
+    fireEvent.click(screen.getByText("نسخ كلمة المرور"));
+    expect(writeText).toHaveBeenCalledWith("Abc123XyZ9");
   });
 });

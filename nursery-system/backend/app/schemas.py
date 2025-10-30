@@ -33,6 +33,16 @@ class TokenResponse(BaseModel):
 class RefreshTokenRequest(BaseModel):
     refresh_token: str
 
+class PasswordChangeRequest(BaseModel):
+    current_password: str = Field(..., min_length=8)
+    new_password: str = Field(..., min_length=8)
+
+    @validator('new_password')
+    def validate_new_password(cls, v, values):
+        if 'current_password' in values and v == values['current_password']:
+            raise ValueError('New password must be different from current password')
+        return v
+
 # User schemas
 class UserBase(BaseModel):
     email: EmailStr
@@ -242,6 +252,52 @@ class FileAssetResponse(BaseModel):
     file_size: int
     content_type: str
     uploaded_by: int
+    created_at: datetime
+
+    class Config:
+        from_attributes = True
+
+# Notification schemas
+class NotificationCreate(BaseModel):
+    user_id: int
+    title: str = Field(..., min_length=1, max_length=200)
+    message: str = Field(..., min_length=1)
+    type: str = Field(default="info", pattern="^(info|success|warning|error)$")
+    link: Optional[str] = Field(None, max_length=500)
+
+class NotificationResponse(BaseModel):
+    id: int
+    user_id: int
+    title: str
+    message: str
+    type: str
+    is_read: bool
+    link: Optional[str]
+    created_at: datetime
+    read_at: Optional[datetime]
+
+    class Config:
+        from_attributes = True
+
+# Audit Log schemas
+class AuditLogCreate(BaseModel):
+    user_id: Optional[int] = None
+    action: str = Field(..., min_length=1, max_length=100)
+    resource_type: str = Field(..., min_length=1, max_length=50)
+    resource_id: Optional[int] = None
+    details: Optional[Dict[str, Any]] = None
+    ip_address: Optional[str] = Field(None, max_length=45)
+    user_agent: Optional[str] = Field(None, max_length=500)
+
+class AuditLogResponse(BaseModel):
+    id: int
+    user_id: Optional[int]
+    action: str
+    resource_type: str
+    resource_id: Optional[int]
+    details: Optional[Dict[str, Any]]
+    ip_address: Optional[str]
+    user_agent: Optional[str]
     created_at: datetime
 
     class Config:

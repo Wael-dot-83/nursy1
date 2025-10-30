@@ -41,6 +41,7 @@ class User(Base):
     # Relationships
     nursery = relationship("Nursery", back_populates="users")
     children = relationship("Child", back_populates="parent")
+    notifications = relationship("Notification", back_populates="user", lazy="dynamic")
 
     __table_args__ = (
         Index('idx_users_role', 'role'),
@@ -218,4 +219,49 @@ class RefreshToken(Base):
     __table_args__ = (
         Index('idx_refresh_tokens_user', 'user_id'),
         Index('idx_refresh_tokens_expires', 'expires_at'),
+    )
+
+class Notification(Base):
+    __tablename__ = "notifications"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    title = Column(String(200), nullable=False)
+    message = Column(Text, nullable=False)
+    type = Column(String(50), nullable=False, default="info")  # info, success, warning, error
+    is_read = Column(Boolean, default=False, nullable=False)
+    link = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    read_at = Column(DateTime, nullable=True)
+
+    # Relationships
+    user = relationship("User", back_populates="notifications")
+
+    __table_args__ = (
+        Index('idx_notifications_user', 'user_id'),
+        Index('idx_notifications_read', 'is_read'),
+        Index('idx_notifications_created', 'created_at'),
+    )
+
+class AuditLog(Base):
+    __tablename__ = "audit_logs"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
+    action = Column(String(100), nullable=False)  # create, update, delete, login, logout
+    resource_type = Column(String(50), nullable=False)  # user, child, nursery, etc.
+    resource_id = Column(Integer, nullable=True)
+    details = Column(JSON, nullable=True)  # Additional details about the action
+    ip_address = Column(String(45), nullable=True)
+    user_agent = Column(String(500), nullable=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+
+    __table_args__ = (
+        Index('idx_audit_logs_user', 'user_id'),
+        Index('idx_audit_logs_action', 'action'),
+        Index('idx_audit_logs_resource', 'resource_type', 'resource_id'),
+        Index('idx_audit_logs_created', 'created_at'),
     )

@@ -62,3 +62,8 @@ export const AUDIT_ACTIONS = {
   LOGIN: 'login',
   LOGOUT: 'logout',
 };
+
+// Feature flags
+export const FEATURE_FLAGS = {
+  'nursery.branchManagers.v1': import.meta.env.VITE_FEATURE_NURSERY_BRANCH_MANAGERS_V1 !== 'false',
+};

@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { apiClient, handleApiError } from '../../lib/apiClient';
+import { FEATURE_FLAGS } from '../../lib/constants';
 import { PlusIcon, PencilIcon, TrashIcon, BuildingStorefrontIcon } from '@heroicons/react/24/outline';
 
 const JORDAN_GOVERNORATES = [
@@ -24,11 +25,13 @@ const GOVERNORATE_DISPLAY_NAMES = {
 };
 
 function NurseryForm({ nursery, onClose, onSuccess }) {
+  const branchManagersEnabled = FEATURE_FLAGS['nursery.branchManagers.v1'];
   const [currentStep, setCurrentStep] = useState(1);
   const [hasBranches, setHasBranches] = useState(nursery?.branches?.length > 0 || false);
   const [numBranches, setNumBranches] = useState(nursery?.branches?.length || 0);
   const [showManagerCredentials, setShowManagerCredentials] = useState(false);
-  const [managerCredentials, setManagerCredentials] = useState(null);
+  const [managerCredentials, setManagerCredentials] = useState([]);
+  const primaryManager = managerCredentials[0] || null;
   const [formData, setFormData] = useState({
     name: nursery?.name || '',
     mainPhone: nursery?.mainPhone || '',
@@ -50,6 +53,29 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({});
 
+  const handleCopyAllCredentials = async () => {
+    if (!branchManagersEnabled || managerCredentials.length === 0) {
+      return;
+    }
+
+    const rows = managerCredentials.map((manager, index) => {
+      const scopeLabel =
+        manager.scope ||
+        (manager.branchId ? `Branch ${index}` : 'Main');
+      const password = manager.tempPassword || manager.temporaryPassword || '';
+      return `${scopeLabel}\t${manager.email}\t${password}`;
+    });
+    const header = 'Scope\tManager Email\tTemporary Password';
+    const payload = [header, ...rows].join('\n');
+
+    try {
+      await navigator.clipboard.writeText(payload);
+    } catch (error) {
+      console.error('Failed to copy manager credentials', error);
+      window.prompt('انسخ بيانات المديرين التالية:', payload);
+    }
+  };
+
   const queryClient = useQueryClient();
 
   const mutation = useMutation({
@@ -62,11 +88,20 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
     },
     onSuccess: (response) => {
       queryClient.invalidateQueries(['nurseries']);
-      queryClient.invalidateQueries(['users']);
+      queryClient.invalidateQueries(['admin-users']);
       
-      if (!nursery && response.data.manager) {
-        // Show manager credentials for new nursery
-        setManagerCredentials(response.data.manager);
+      const credentialPayload = Array.isArray(response.data?.managers)
+        ? response.data.managers
+        : response.data?.manager
+          ? [response.data.manager]
+          : [];
+
+      if (!nursery && credentialPayload.length > 0) {
+        if (branchManagersEnabled) {
+          setManagerCredentials(credentialPayload);
+        } else {
+          setManagerCredentials([credentialPayload[0]]);
+        }
         setShowManagerCredentials(true);
       } else {
         onSuccess();
@@ -199,7 +234,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
     if (step === 3 && hasBranches) {
       // Branch validation
       formData.branches.forEach((branch, index) => {
-        if (!branch.name?.trim()) {
+        if (!branchManagersEnabled && !branch.name?.trim()) {
           newErrors[`branch_${index}_name`] = `اسم الفرع ${index + 1} مطلوب`;
         }
         if (branch.phone && !/^(07[789]\d{7}|0[2-6]\d{6,7})$/.test(branch.phone.replace(/\s+/g, ''))) {
@@ -210,6 +245,45 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
+  };
+
+  const buildNurseryPayload = (data) => {
+    const trimmedName = data.name?.trim() || '';
+    const hasBranchEntries = Array.isArray(data.branches) && data.branches.length > 0 && hasBranches;
+
+    return {
+      name: trimmedName,
+      main_phone: data.mainPhone?.trim() || '',
+      email: data.email?.trim() || undefined,
+      main_address: {
+        street: data.mainAddress?.street?.trim() || '',
+        city: data.mainAddress?.city?.trim() || '',
+        governorate: data.mainAddress?.governorate || '',
+        postalCode: data.mainAddress?.postalCode?.trim() || '',
+      },
+      age_range: {
+        minAge: Number.isInteger(data.ageRange?.minAge) ? data.ageRange.minAge : 70,
+        maxAge: Number.isInteger(data.ageRange?.maxAge) ? data.ageRange.maxAge : 52,
+      },
+      notes: data.notes?.trim() || undefined,
+      has_branches: hasBranchEntries,
+      branches: hasBranchEntries
+        ? data.branches.map((branch) => {
+            const branchPhone = branch.phone?.trim() || '';
+            return {
+              ...(branch.id ? { id: branch.id } : {}),
+              name: trimmedName,
+              phone: branchPhone || undefined,
+              address: {
+                street: branch.address?.street?.trim() || '',
+                city: branch.address?.city?.trim() || '',
+                governorate: branch.address?.governorate || '',
+                postalCode: branch.address?.postalCode?.trim() || '',
+              },
+            };
+          })
+        : [],
+    };
   };
 
   const handleSubmit = (e) => {
@@ -225,7 +299,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
     }
 
     // Final submission
-    mutation.mutate(formData);
+    mutation.mutate(buildNurseryPayload(formData));
   };
 
   const handleInputChange = (field, value) => {
@@ -271,7 +345,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
     const newBranches = [];
     for (let i = 0; i < numBranches; i++) {
       newBranches.push({
-        name: '',
+        name: branchManagersEnabled ? (formData.name || '') : '',
         address: { street: '', city: '', governorate: '', postalCode: '' },
         phone: '',
       });
@@ -612,6 +686,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     <h5 className="mb-4 font-medium text-slate-800">الفرع {index + 1}</h5>
 
                     <div className="grid gap-4 md:grid-cols-2">
+                    {!branchManagersEnabled ? (
                       <div>
                         <label htmlFor={`branch-name-${index}`} className="block text-sm font-medium text-slate-700">
                           اسم الفرع *
@@ -632,6 +707,11 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                           <p className="mt-1 text-sm text-red-600">{errors[`branch_${index}_name`]}</p>
                         )}
                       </div>
+                    ) : (
+                      <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600">
+                        سيتم استخدام اسم الحضانة <span className="font-medium text-slate-800">{formData.name || '...'}</span> لهذا الفرع تلقائياً.
+                      </div>
+                    )}
                       <div>
                         <label htmlFor={`branch-phone-${index}`} className="block text-sm font-medium text-slate-700">
                           رقم الهاتف
@@ -695,18 +775,20 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                           ))}
                         </select>
                       </div>
-                      <div>
-                        <label htmlFor={`branch-postal-${index}`} className="block text-sm font-medium text-slate-700">الرمز البريدي</label>
-                        <input
-                          id={`branch-postal-${index}`}
-                          name={`branchPostal-${index}`}
-                          type="text"
-                          value={branch.address?.postalCode || ''}
-                          onChange={(e) => handleBranchChange(index, 'address.postalCode', e.target.value)}
-                          className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none"
-                          autoComplete="postal-code"
-                        />
-                      </div>
+                      {!branchManagersEnabled && (
+                        <div>
+                          <label htmlFor={`branch-postal-${index}`} className="block text-sm font-medium text-slate-700">الرمز البريدي</label>
+                          <input
+                            id={`branch-postal-${index}`}
+                            name={`branchPostal-${index}`}
+                            type="text"
+                            value={branch.address?.postalCode || ''}
+                            onChange={(e) => handleBranchChange(index, 'address.postalCode', e.target.value)}
+                            className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none"
+                            autoComplete="postal-code"
+                          />
+                        </div>
+                      )}
                     </div>
                   </div>
                 ))}
@@ -813,97 +895,205 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
       </div>
 
       {/* Manager Credentials Modal */}
-      {showManagerCredentials && managerCredentials && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
-            <div className="text-center">
-              <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
-                <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-                  <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
-                </svg>
+      {showManagerCredentials && managerCredentials.length > 0 && (
+        branchManagersEnabled ? (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+            <div className="w-full max-w-2xl rounded-lg bg-white p-6 shadow-xl">
+              <div className="text-center">
+                <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                  <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                  </svg>
+                </div>
+                <h3 className="mt-4 text-lg font-medium text-slate-800">تم إنشاء الحضانة بنجاح!</h3>
+                <p className="mt-2 text-sm text-slate-600">
+                  تم إنشاء {managerCredentials.length} حساب مدير للحضانة والأفرع المتعلقة بها. يرجى حفظ بيانات الدخول التالية:
+                </p>
               </div>
-              <h3 className="mt-4 text-lg font-medium text-slate-800">تم إنشاء الحضانة بنجاح!</h3>
-              <p className="mt-2 text-sm text-slate-600">
-                تم إنشاء حساب مدير تلقائياً لهذه الحضانة. يرجى حفظ بيانات الدخول التالية:
-              </p>
-            </div>
 
-            <div className="mt-6 rounded-lg bg-slate-50 p-4">
-              <div className="space-y-3">
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">اسم المستخدم</label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <input
-                      type="text"
-                      readOnly
-                      value={managerCredentials.username}
-                      className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-mono"
-                    />
-                    <button
-                      onClick={() => navigator.clipboard.writeText(managerCredentials.username)}
-                      className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
-                      title="نسخ"
-                    >
-                      📋
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">كلمة المرور المؤقتة</label>
-                  <div className="mt-1 flex items-center gap-2">
-                    <input
-                      type="password"
-                      readOnly
-                      value={managerCredentials.temporaryPassword}
-                      className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-mono"
-                    />
-                    <button
-                      onClick={() => navigator.clipboard.writeText(managerCredentials.temporaryPassword)}
-                      className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
-                      title="نسخ"
-                    >
-                      📋
-                    </button>
-                  </div>
-                </div>
-                <div>
-                  <label className="block text-sm font-medium text-slate-700">الاسم الكامل</label>
-                  <input
-                    type="text"
-                    readOnly
-                    value={managerCredentials.fullName}
-                    className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                  />
-                </div>
-                {managerCredentials.email && (
-                  <div>
-                    <label className="block text-sm font-medium text-slate-700">البريد الإلكتروني</label>
-                    <input
-                      type="email"
-                      readOnly
-                      value={managerCredentials.email}
-                      className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
-                    />
-                  </div>
-                )}
+              <div className="mt-6 flex items-center justify-between gap-4">
+                <span className="text-sm text-slate-500">
+                  يمكنك نسخ جميع بيانات الدخول أو نسخ كل حساب بشكل منفصل.
+                </span>
+                <button
+                  type="button"
+                  onClick={handleCopyAllCredentials}
+                  className="rounded-md bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
+                >
+                  نسخ جميع البيانات
+                </button>
               </div>
-            </div>
 
-            <div className="mt-6 flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowManagerCredentials(false);
-                  setManagerCredentials(null);
-                  onSuccess();
-                  onClose();
-                }}
-                className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
-              >
-                تم الفهم
-              </button>
+              <div className="mt-4 space-y-4">
+                {managerCredentials.map((manager, index) => (
+                  <div key={`${manager.email}-${index}`} className="rounded-lg border border-slate-200 bg-slate-50 p-4">
+                    <div className="flex items-center justify-between">
+                      <div>
+                        <h4 className="text-sm font-semibold text-slate-800">
+                          {manager.scope || (manager.branchName ? `فرع: ${manager.branchName}` : 'الإدارة العامة للحضانة')}
+                        </h4>
+                        <p className="text-xs text-slate-500">استخدم البيانات التالية لتفعيل الحساب في أول تسجيل دخول.</p>
+                      </div>
+                      <span className="rounded-full bg-primary-100 px-2 py-1 text-xs font-medium text-primary-700">
+                        {index + 1} / {managerCredentials.length}
+                      </span>
+                    </div>
+
+                    <div className="mt-4 grid gap-4 md:grid-cols-3">
+                      <div className="md:col-span-1">
+                        <label className="block text-sm font-medium text-slate-700">النطاق</label>
+                        <div className="mt-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">
+                          {manager.scope || (manager.branchName ? `Branch ${index}` : 'Main')}
+                        </div>
+                      </div>
+                      <div className="md:col-span-1">
+                        <label className="block text-sm font-medium text-slate-700">البريد الإلكتروني</label>
+                        <div className="mt-1 flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={manager.email}
+                            className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-mono"
+                          />
+                          <button
+                            onClick={() => navigator.clipboard.writeText(manager.email)}
+                            className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
+                            title="نسخ البريد الإلكتروني"
+                          >
+                            📋
+                          </button>
+                        </div>
+                      </div>
+                      <div className="md:col-span-1">
+                        <label className="block text-sm font-medium text-slate-700">كلمة المرور المؤقتة</label>
+                        <div className="mt-1 flex items-center gap-2">
+                          <input
+                            type="text"
+                            readOnly
+                            value={manager.temporaryPassword || manager.tempPassword || ''}
+                            className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-mono"
+                          />
+                          <button
+                            onClick={() => navigator.clipboard.writeText(manager.temporaryPassword || manager.tempPassword || '')}
+                            className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
+                            title="نسخ كلمة المرور"
+                          >
+                            📋
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="mt-6 flex justify-end gap-3">
+                <button
+                  onClick={() => {
+                    setShowManagerCredentials(false);
+                    setManagerCredentials([]);
+                    onSuccess();
+                    onClose();
+                  }}
+                  className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                >
+                  تم الفهم
+                </button>
+              </div>
             </div>
           </div>
-        </div>
+        ) : (
+          primaryManager && (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
+              <div className="w-full max-w-md rounded-lg bg-white p-6 shadow-xl">
+                <div className="text-center">
+                  <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-green-100">
+                    <svg className="h-6 w-6 text-green-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                      <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
+                    </svg>
+                  </div>
+                  <h3 className="mt-4 text-lg font-medium text-slate-800">تم إنشاء الحضانة بنجاح!</h3>
+                  <p className="mt-2 text-sm text-slate-600">تم إنشاء حساب مدير تلقائياً لهذه الحضانة. يرجى حفظ بيانات الدخول التالية:</p>
+                </div>
+
+                <div className="mt-6 rounded-lg bg-slate-50 p-4">
+                  <div className="space-y-3">
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">اسم المستخدم</label>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input
+                          type="text"
+                          readOnly
+                          value={primaryManager.username || primaryManager.email}
+                          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-mono"
+                        />
+                        <button
+                          onClick={() => navigator.clipboard.writeText(primaryManager.username || primaryManager.email)}
+                          className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
+                          title="نسخ"
+                        >
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">كلمة المرور المؤقتة</label>
+                      <div className="mt-1 flex items-center gap-2">
+                        <input
+                          type="password"
+                          readOnly
+                          value={primaryManager.temporaryPassword || primaryManager.tempPassword || ''}
+                          className="flex-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm font-mono"
+                        />
+                        <button
+                          onClick={() => navigator.clipboard.writeText(primaryManager.temporaryPassword || primaryManager.tempPassword || '')}
+                          className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
+                          title="نسخ"
+                        >
+                          📋
+                        </button>
+                      </div>
+                    </div>
+                    <div>
+                      <label className="block text-sm font-medium text-slate-700">الاسم الكامل</label>
+                      <input
+                        type="text"
+                        readOnly
+                        value={primaryManager.fullName}
+                        className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                      />
+                    </div>
+                    {primaryManager.email && (
+                      <div>
+                        <label className="block text-sm font-medium text-slate-700">البريد الإلكتروني</label>
+                        <input
+                          type="email"
+                          readOnly
+                          value={primaryManager.email}
+                          className="mt-1 block w-full rounded-md border border-slate-300 bg-white px-3 py-2 text-sm"
+                        />
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                <div className="mt-6 flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setShowManagerCredentials(false);
+                      setManagerCredentials([]);
+                      onSuccess();
+                      onClose();
+                    }}
+                    className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
+                  >
+                    تم الفهم
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        )
       )}
     </div>
   );
@@ -912,14 +1102,24 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 export default function NurseryManagement() {
   const [showForm, setShowForm] = useState(false);
   const [editingNursery, setEditingNursery] = useState(null);
+  const queryClient = useQueryClient();
 
-  const { data: nurseries, isLoading, isError, error } = useQuery({
+  const { data: rawNurseryData, isLoading, isError, error } = useQuery({
     queryKey: ['nurseries'],
     queryFn: async () => {
       const response = await apiClient.get('/admin/nurseries');
       return response.data;
     },
   });
+
+  const nurseriesCandidates = [
+    rawNurseryData,
+    rawNurseryData?.data,
+    rawNurseryData?.nurseries,
+    rawNurseryData?.items,
+    rawNurseryData?.results,
+  ];
+  const nurseries = nurseriesCandidates.find(Array.isArray) ?? [];
 
   const deleteMutation = useMutation({
     mutationFn: async (nurseryId) => {
@@ -974,7 +1174,7 @@ export default function NurseryManagement() {
         </div>
       )}
 
-      {nurseries && (
+      {nurseries.length > 0 && (
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {nurseries.map((nursery) => (
             <div key={nursery.id} className="card space-y-4">
