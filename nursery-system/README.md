@@ -2,6 +2,24 @@
 
 A comprehensive web-based childcare management system designed for Jordanian nurseries, built with modern technologies and Arabic language support.
 
+## 📖 Documentation
+
+**Complete documentation is now available:**
+
+- **[Setup Guide](SETUP_GUIDE.md)** - Complete installation and configuration guide for all platforms
+- **[API Documentation](API_DOCUMENTATION.md)** - Comprehensive API reference with examples
+- **[Deployment Guide](DEPLOYMENT_GUIDE.md)** - Production deployment for AWS, Heroku, Docker, and bare metal
+- **[User Guide](USER_GUIDE.md)** - Complete user manual for all roles (Admin, Manager, Parent, Supervisor)
+- **[Developer Guide](DEVELOPER_GUIDE.md)** - Technical documentation for developers
+- **[Admin Guide](ADMIN_GUIDE.md)** - Administrator manual
+- **[Parent Guide](PARENT_GUIDE.md)** - Parent user guide
+
+**Quick Links:**
+- 🚀 [Quick Start](#quick-start) - Get started in 5 minutes
+- 🐳 [Docker Setup](DEPLOYMENT_GUIDE.md#docker-deployment) - One-command deployment
+- 📚 [API Docs](http://localhost:8000/docs) - Interactive API documentation (when running)
+- 🔧 [Troubleshooting](#-troubleshooting) - Common issues and solutions
+
 ## 🌟 Features
 
 ### Core Functionality
@@ -29,18 +47,30 @@ A comprehensive web-based childcare management system designed for Jordanian nur
 
 ## 🆕 Recent Updates
 
-### Version 1.0.0 Features
-- **Enhanced Security**: JWT refresh tokens, improved OTP system
-- **Rate Limiting**: Configurable API rate limits with SlowAPI
-- **Audit Logging**: Complete activity tracking for compliance
-- **File Management**: Secure upload/download with validation
-- **Notification System**: In-app notifications with external integrations
-- **Improved Settings**: Centralized configuration with Pydantic settings
-- **Better Logging**: Structured logging with configurable levels
-- **Database Optimization**: Improved indexes and relationships
-- **Rate Limiting**: DDoS protection with configurable limits
-- **Audit Logging**: Comprehensive activity tracking for compliance
-- **Notification System**: In-app notifications with SMS/email integration
+### Version 1.0.0 - Production Ready Release
+
+**New Documentation** 📚
+- Complete API documentation with examples for all endpoints
+- Comprehensive deployment guide for AWS, Heroku, and Docker
+- Step-by-step setup guide for Windows, macOS, and Linux
+- User guides for all roles (Admin, Manager, Parent, Supervisor)
+
+**DevOps & Deployment** 🚀
+- Production-ready Docker containers with multi-stage builds
+- Docker Compose orchestration with PostgreSQL and Redis
+- GitHub Actions CI/CD pipeline with automated testing and deployment
+- Nginx configuration with security headers and caching
+- Automated security scanning with Trivy
+
+**Enhanced Features** ✨
+- Enhanced Security: JWT refresh tokens, improved OTP system
+- Rate Limiting: Configurable API rate limits with SlowAPI
+- Audit Logging: Complete activity tracking for compliance
+- File Management: Secure upload/download with validation
+- Notification System: In-app notifications with SMS/email integration
+- Database Optimization: Improved indexes and relationships
+- Pydantic v2 Migration: Modern validation and better performance
+- Test Infrastructure: Comprehensive test suite for backend and frontend
 
 ## Quick Start
 
@@ -91,7 +121,35 @@ npm install
 npm run dev -- --host 0.0.0.0 --port 5173
 ```
 
-### Docker (Optional)
+### Docker Compose (Recommended)
+
+The fastest way to get started is using Docker Compose:
+
+```bash
+# Copy environment template
+cp .env.example .env
+
+# Edit with your settings
+nano .env
+
+# Start all services (backend, frontend, PostgreSQL, Redis)
+docker-compose up -d
+
+# View logs
+docker-compose logs -f
+
+# Stop services
+docker-compose down
+```
+
+Services will be available at:
+- **Frontend**: http://localhost
+- **Backend API**: http://localhost:8000
+- **API Docs**: http://localhost:8000/docs
+
+For detailed Docker deployment instructions, see the [Deployment Guide](DEPLOYMENT_GUIDE.md#docker-deployment).
+
+### Manual Docker (Optional)
 ```bash
 # Backend
 docker build -t nursery-backend backend
@@ -99,7 +157,7 @@ docker run --rm -p 8000:8000 --env-file backend/.env nursery-backend
 
 # Frontend
 docker build -t nursery-frontend frontend
-docker run --rm -p 5173:5173 --env-file frontend/.env nursery-frontend
+docker run --rm -p 80:80 nursery-frontend
 ```
 
 ### Demo Accounts

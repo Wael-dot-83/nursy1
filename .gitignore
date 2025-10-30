@@ -31,5 +31,20 @@ storage/
 
 # Logs and temp files
 *.log
+logs/
 temp_patch.txt
 ~$*
+
+# Claude Code
+.claude/
+
+# Tokens and credentials
+**/token.txt
+**/auth_token.json
+**/login_response.json
+**/*password*.txt
+**/*token*.json
+
+# Test files
+test_*.py
+!tests/test_*.py
