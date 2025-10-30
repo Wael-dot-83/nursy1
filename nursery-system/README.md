@@ -16,6 +16,7 @@ A comprehensive web-based childcare management system designed for Jordanian nur
 
 **Quick Links:**
 - 🚀 [Quick Start](#quick-start) - Get started in 5 minutes
+- 🌐 [**Deploy for End Users**](DEPLOYMENT_INSTRUCTIONS.md) - **Make your app accessible online (Free options!)**
 - 🐳 [Docker Setup](DEPLOYMENT_GUIDE.md#docker-deployment) - One-command deployment
 - 📚 [API Docs](http://localhost:8000/docs) - Interactive API documentation (when running)
 - 🔧 [Troubleshooting](#-troubleshooting) - Common issues and solutions
