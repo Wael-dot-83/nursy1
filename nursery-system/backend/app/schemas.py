@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field, validator
+from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, time
 from .models import RoleEnum, AttendanceStatus, ChildStatus
@@ -37,9 +37,10 @@ class PasswordChangeRequest(BaseModel):
     current_password: str = Field(..., min_length=8)
     new_password: str = Field(..., min_length=8)
 
-    @validator('new_password')
-    def validate_new_password(cls, v, values):
-        if 'current_password' in values and v == values['current_password']:
+    @field_validator('new_password')
+    @classmethod
+    def validate_new_password(cls, v, info):
+        if 'current_password' in info.data and v == info.data['current_password']:
             raise ValueError('New password must be different from current password')
         return v
 
