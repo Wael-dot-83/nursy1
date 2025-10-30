@@ -48,3 +48,7 @@ temp_patch.txt
 # Test files
 test_*.py
 !tests/test_*.py
+
+# Deployment secrets
+DEPLOYMENT_SECRETS.txt
+*_SECRETS.txt
