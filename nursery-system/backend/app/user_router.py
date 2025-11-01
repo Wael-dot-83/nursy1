@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from .database import get_db
@@ -9,6 +9,7 @@ from .schemas import (
 )
 from .dependencies import require_admin
 from .security import hash_password
+from .audit_helper import log_create, log_update, log_delete
 
 router = APIRouter()
 
@@ -29,7 +30,8 @@ async def get_users(
     if role:
         query = query.filter(User.role == role)
 
-    users = query.offset(skip).limit(limit).all()
+    # Sort by creation date descending (newest first)
+    users = query.order_by(User.created_at.desc()).offset(skip).limit(limit).all()
 
     # Format users with fullName field for frontend
     return [
@@ -42,6 +44,7 @@ async def get_users(
             "nurseryId": user.nursery_id,
             "branchId": None,
             "isActive": user.is_active,
+            "tempPassword": user.temp_password,
             "lastLogin": None,  # TODO: Track last login
             "createdAt": user.created_at,
             "updatedAt": user.updated_at
@@ -52,6 +55,7 @@ async def get_users(
 @router.post("/", response_model=dict)
 async def create_user(
     user_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -95,6 +99,7 @@ async def create_user(
     db_user = User(
         email=email,
         hashed_password=hashed_password,
+        temp_password=temp_password,
         first_name=first_name,
         last_name=last_name,
         phone=phone,
@@ -103,6 +108,15 @@ async def create_user(
     )
 
     db.add(db_user)
+    db.flush()
+
+    # Log the action
+    log_create(
+        db, current_user, "user", db_user.id,
+        details={"email": email, "role": role, "nursery_id": nursery_id},
+        request=request
+    )
+
     db.commit()
     db.refresh(db_user)
 
@@ -139,6 +153,7 @@ async def get_user(
 async def update_user(
     user_id: int,
     user_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -146,6 +161,10 @@ async def update_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Track changes for audit log
+    changes = {}
+    old_values = {}
 
     # Extract data
     full_name = user_data.get("full_name")
@@ -164,20 +183,40 @@ async def update_user(
     # Update full_name if provided
     if full_name:
         name_parts = full_name.strip().split(maxsplit=1)
+        old_values["full_name"] = f"{user.first_name} {user.last_name}"
         user.first_name = name_parts[0] if len(name_parts) > 0 else ""
         user.last_name = name_parts[1] if len(name_parts) > 1 else ""
+        changes["full_name"] = full_name
 
     # Update other fields
-    if email is not None:
+    if email is not None and email != user.email:
+        old_values["email"] = user.email
         user.email = email
-    if phone is not None:
+        changes["email"] = email
+    if phone is not None and phone != user.phone:
+        old_values["phone"] = user.phone
         user.phone = phone
-    if role is not None:
+        changes["phone"] = phone
+    if role is not None and role != user.role:
+        old_values["role"] = user.role
         user.role = role
-    if nursery_id is not None:
+        changes["role"] = role
+    if nursery_id is not None and nursery_id != user.nursery_id:
+        old_values["nursery_id"] = user.nursery_id
         user.nursery_id = nursery_id
-    if is_active is not None:
+        changes["nursery_id"] = nursery_id
+    if is_active is not None and is_active != user.is_active:
+        old_values["is_active"] = user.is_active
         user.is_active = is_active
+        changes["is_active"] = is_active
+
+    # Log the action
+    if changes:
+        log_update(
+            db, current_user, "user", user_id,
+            details={"changes": changes, "old_values": old_values},
+            request=request
+        )
 
     db.commit()
     db.refresh(user)
@@ -191,6 +230,7 @@ async def update_user(
         "nurseryId": user.nursery_id,
         "branchId": None,
         "isActive": user.is_active,
+        "tempPassword": user.temp_password,
         "createdAt": user.created_at,
         "updatedAt": user.updated_at
     }
@@ -198,6 +238,7 @@ async def update_user(
 @router.delete("/{user_id}", response_model=BaseResponse)
 async def delete_user(
     user_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -209,6 +250,17 @@ async def delete_user(
     user = db.query(User).filter(User.id == user_id).first()
     if not user:
         raise HTTPException(status_code=404, detail="User not found")
+
+    # Log the deletion before removing
+    log_delete(
+        db, current_user, "user", user_id,
+        details={
+            "email": user.email,
+            "role": user.role,
+            "full_name": f"{user.first_name} {user.last_name}"
+        },
+        request=request
+    )
 
     db.delete(user)
     db.commit()
@@ -273,3 +325,38 @@ async def deactivate_user(
     db.commit()
     db.refresh(user)
     return user
+
+@router.put("/{user_id}/password", response_model=dict)
+async def update_user_password(
+    user_id: int,
+    password_data: dict,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_admin)
+):
+    """Update user password (Admin only)"""
+    import secrets
+    import string
+
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(status_code=404, detail="User not found")
+
+    # Get new password from request or generate one
+    new_password = password_data.get("password")
+    if not new_password:
+        # Generate a new random password
+        new_password = ''.join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+
+    # Update password
+    user.hashed_password = hash_password(new_password)
+    user.temp_password = new_password
+
+    db.commit()
+    db.refresh(user)
+
+    return {
+        "id": user.id,
+        "email": user.email,
+        "tempPassword": user.temp_password,
+        "message": "Password updated successfully"
+    }

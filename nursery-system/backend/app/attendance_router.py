@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date, datetime, time
@@ -9,6 +9,7 @@ from .schemas import (
     BaseResponse, AttendanceStats
 )
 from .dependencies import require_admin, require_manager, require_supervisor, require_parent
+from .audit_helper import log_create, log_update, log_delete
 
 router = APIRouter()
 
@@ -41,6 +42,7 @@ async def get_attendance(
 @router.post("/", response_model=AttendanceResponse)
 async def create_attendance(
     attendance: AttendanceCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -61,6 +63,19 @@ async def create_attendance(
     # Create attendance record
     db_attendance = Attendance(**attendance.dict())
     db.add(db_attendance)
+    db.flush()
+
+    # Log the attendance creation
+    log_create(
+        db, current_user, "attendance", db_attendance.id,
+        details={
+            "child_id": db_attendance.child_id,
+            "date": str(db_attendance.date),
+            "status": db_attendance.status
+        },
+        request=request
+    )
+
     db.commit()
     db.refresh(db_attendance)
     return db_attendance
@@ -81,6 +96,7 @@ async def get_attendance_record(
 async def update_attendance(
     attendance_id: int,
     attendance_update: AttendanceUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -89,9 +105,20 @@ async def update_attendance(
     if not attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
 
+    # Track changes
+    changes = attendance_update.dict(exclude_unset=True)
+
     # Update fields
-    for field, value in attendance_update.dict(exclude_unset=True).items():
+    for field, value in changes.items():
         setattr(attendance, field, value)
+
+    # Log the attendance update
+    if changes:
+        log_update(
+            db, current_user, "attendance", attendance_id,
+            details={"changes": changes, "child_id": attendance.child_id},
+            request=request
+        )
 
     db.commit()
     db.refresh(attendance)
@@ -100,6 +127,7 @@ async def update_attendance(
 @router.delete("/{attendance_id}", response_model=BaseResponse)
 async def delete_attendance(
     attendance_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -107,6 +135,17 @@ async def delete_attendance(
     attendance = db.query(Attendance).filter(Attendance.id == attendance_id).first()
     if not attendance:
         raise HTTPException(status_code=404, detail="Attendance record not found")
+
+    # Log the deletion before removing
+    log_delete(
+        db, current_user, "attendance", attendance_id,
+        details={
+            "child_id": attendance.child_id,
+            "date": str(attendance.date),
+            "status": attendance.status
+        },
+        request=request
+    )
 
     db.delete(attendance)
     db.commit()

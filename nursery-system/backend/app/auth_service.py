@@ -75,26 +75,26 @@ class AuthService:
     @staticmethod
     def create_tokens(db: Session, user: User) -> tuple[str, str]:
         """Create access and refresh tokens for user"""
+        # NOTE: This method is deprecated. Use create_access_token and create_refresh_token directly
+        # from security.py for better token management with JTI.
+        # This is kept for backward compatibility only.
+
         # Create access token
         access_token_data = {
             "sub": str(user.id),
-            "email": user.email,
-            "role": user.role.value,
-            "nursery_id": user.nursery_id
         }
-        access_token = create_access_token(access_token_data)
+        access_token, access_jti = create_access_token(access_token_data)
 
         # Create refresh token
         refresh_token_data = {
             "sub": str(user.id),
-            "email": user.email
         }
-        refresh_token = create_refresh_token(refresh_token_data)
+        refresh_token, refresh_token_hash = create_refresh_token(refresh_token_data)
 
         # Store refresh token in database
         db_refresh_token = RefreshToken(
             user_id=user.id,
-            token_hash=hash_password(refresh_token),  # Hash the refresh token
+            token_hash=refresh_token_hash,
             expires_at=datetime.now(timezone.utc) + timedelta(days=settings.refresh_token_expire_days)
         )
         db.add(db_refresh_token)

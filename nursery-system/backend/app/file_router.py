@@ -1,7 +1,7 @@
 """
 File upload and download router
 """
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Form, Request
 from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 from typing import Optional, List
@@ -15,6 +15,7 @@ from .dependencies import get_current_user
 from .models import FileAsset, User
 from .schemas import FileAssetResponse, BaseResponse
 from .settings import settings
+from .audit_helper import log_create, log_delete
 import logging
 
 logger = logging.getLogger(__name__)
@@ -84,6 +85,7 @@ def save_upload_file(file: UploadFile, user_id: int) -> dict:
 async def upload_file(
     file: UploadFile = File(...),
     description: Optional[str] = Form(None),
+    request: Request = None,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -114,6 +116,19 @@ async def upload_file(
         )
 
         db.add(db_file)
+        db.flush()
+
+        # Log the file upload
+        log_create(
+            db, current_user, "file", db_file.id,
+            details={
+                "filename": db_file.original_filename,
+                "content_type": db_file.content_type,
+                "file_size": db_file.file_size
+            },
+            request=request
+        )
+
         db.commit()
         db.refresh(db_file)
 
@@ -198,6 +213,7 @@ async def download_file(
 @router.delete("/{file_id}", response_model=BaseResponse)
 async def delete_file(
     file_id: int,
+    request: Request,
     current_user: User = Depends(get_current_user),
     db: Session = Depends(get_db)
 ):
@@ -222,6 +238,17 @@ async def delete_file(
         file_path = Path(file_asset.file_path)
         if file_path.exists():
             file_path.unlink()
+
+        # Log the file deletion before removing from database
+        log_delete(
+            db, current_user, "file", file_id,
+            details={
+                "filename": file_asset.original_filename,
+                "content_type": file_asset.content_type,
+                "file_size": file_asset.file_size
+            },
+            request=request
+        )
 
         # Delete database record
         db.delete(file_asset)

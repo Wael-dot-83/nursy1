@@ -2,12 +2,15 @@
 Additional database indexes for performance optimization
 Run this after models are created to add missing indexes
 """
-from sqlalchemy import create_index, Index
+import logging
+from sqlalchemy import Index
 from .database import engine
 from .models import (
     User, Nursery, Branch, Classroom, Child,
     Attendance, DailyReport, FileAsset, Notification, AuditLog
 )
+
+logger = logging.getLogger(__name__)
 
 
 def create_additional_indexes():
@@ -49,7 +52,7 @@ def create_additional_indexes():
     Index('idx_files_created_at', FileAsset.created_at).create(engine, checkfirst=True)
     Index('idx_files_content_type', FileAsset.content_type).create(engine, checkfirst=True)
 
-    print("✅ Additional indexes created successfully")
+    logger.info("Additional database indexes ensured")
 
 
 if __name__ == "__main__":

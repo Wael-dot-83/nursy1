@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException
+from fastapi import APIRouter, Depends, HTTPException, Request
 from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional, Dict, Any
 
@@ -15,6 +15,7 @@ from .schemas import (
 )
 from .dependencies import require_admin
 from .security import hash_password
+from .audit_helper import log_create, log_update, log_delete
 
 router = APIRouter()
 
@@ -139,6 +140,7 @@ async def get_nurseries(
     nurseries = (
         db.query(Nursery)
         .options(selectinload(Nursery.branches))
+        .order_by(Nursery.created_at.desc())  # Sort newest first
         .offset(skip)
         .limit(limit)
         .all()
@@ -149,6 +151,7 @@ async def get_nurseries(
 @router.post("/nurseries")
 async def create_nursery(
     nursery: NurseryCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -184,12 +187,12 @@ async def create_nursery(
             candidate = preferred.strip().lower()
             if candidate and not db.query(User).filter(User.email == candidate).first():
                 return candidate
-        base_candidate = f"{fallback_prefix}@nursery.local"
+        base_candidate = f"{fallback_prefix}@nursery.com"
         if not db.query(User).filter(User.email == base_candidate).first():
             return base_candidate
         counter = 1
         while True:
-            candidate = f"{fallback_prefix}_{counter}@nursery.local"
+            candidate = f"{fallback_prefix}_{counter}@nursery.com"
             if not db.query(User).filter(User.email == candidate).first():
                 return candidate
             counter += 1
@@ -207,6 +210,7 @@ async def create_nursery(
         user = User(
             email=email,
             hashed_password=hash_password(password),
+            temp_password=password,  # Store temp password for display
             first_name=first_name,
             last_name=last_name,
             phone=phone,
@@ -277,6 +281,18 @@ async def create_nursery(
                 branch=branch,
             )
 
+        # Log the nursery creation
+        log_create(
+            db, current_user, "nursery", db_nursery.id,
+            details={
+                "name": db_nursery.name,
+                "email": db_nursery.email,
+                "branches_count": len(created_branches),
+                "managers_created": len(manager_credentials)
+            },
+            request=request
+        )
+
         db.commit()
     except Exception:
         db.rollback()
@@ -321,10 +337,17 @@ async def get_nursery(
 async def update_nursery(
     nursery_id: int,
     nursery_update: NurseryUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
+    import secrets
+    import string
+
     nursery = _get_nursery_or_404(nursery_id, db)
+
+    # Track existing branch IDs before update
+    existing_branch_ids = {branch.id for branch in db.query(Branch).filter(Branch.nursery_id == nursery_id).all()}
 
     if nursery_update.name is not None:
         nursery.name = nursery_update.name
@@ -345,18 +368,115 @@ async def update_nursery(
 
     _apply_branch_updates(nursery, nursery_update.branches, db, enforce_name=nursery.name)
 
+    # Find new branches after update
+    db.flush()
+    current_branches = db.query(Branch).filter(Branch.nursery_id == nursery_id).all()
+    new_branches = [b for b in current_branches if b.id not in existing_branch_ids]
+
+    # Generate manager accounts for new branches
+    manager_credentials = []
+    if new_branches:
+        def generate_password() -> str:
+            return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
+
+        def unique_email(preferred: Optional[str], fallback_prefix: str) -> str:
+            if preferred:
+                candidate = preferred.strip().lower()
+                if candidate and not db.query(User).filter(User.email == candidate).first():
+                    return candidate
+            base_candidate = f"{fallback_prefix}@nursery.com"
+            if not db.query(User).filter(User.email == base_candidate).first():
+                return base_candidate
+            counter = 1
+            while True:
+                candidate = f"{fallback_prefix}_{counter}@nursery.com"
+                if not db.query(User).filter(User.email == candidate).first():
+                    return candidate
+                counter += 1
+
+        # Count existing managers for this nursery
+        existing_managers_count = db.query(User).filter(
+            User.nursery_id == nursery_id,
+            User.role == RoleEnum.MANAGER
+        ).count()
+
+        for idx, branch in enumerate(new_branches, start=existing_managers_count + 1):
+            branch_password = generate_password()
+            branch_email = unique_email(
+                None,
+                f"manager_{nursery_id}_branch_{idx}"
+            )
+            user = User(
+                email=branch_email,
+                hashed_password=hash_password(branch_password),
+                first_name="Manager",
+                last_name=nursery.name,
+                phone=branch.phone or nursery.main_phone,
+                role=RoleEnum.MANAGER,
+                nursery_id=nursery_id,
+                is_active=True,
+            )
+            db.add(user)
+            db.flush()
+            manager_credentials.append({
+                "scope": f"Branch {idx}",
+                "username": branch_email,
+                "email": branch_email,
+                "tempPassword": branch_password,
+                "temporaryPassword": branch_password,
+                "fullName": f"Manager {nursery.name}",
+                "branchId": branch.id,
+                "branchName": branch.name,
+                "nurseryId": nursery_id,
+            })
+
+    # Log the nursery update
+    changes = {}
+    if nursery_update.name is not None:
+        changes["name"] = nursery_update.name
+    if nursery_update.email is not None:
+        changes["email"] = nursery_update.email
+    if new_branches:
+        changes["new_branches"] = len(new_branches)
+
+    log_update(
+        db, current_user, "nursery", nursery_id,
+        details={
+            "changes": changes,
+            "new_managers": len(manager_credentials)
+        },
+        request=request
+    )
+
     db.commit()
     db.refresh(nursery)
-    return _format_nursery(nursery)
+
+    response = _format_nursery(nursery)
+    if manager_credentials:
+        response["managers"] = manager_credentials
+        response["message"] = f"Nursery updated successfully. {len(manager_credentials)} new manager account(s) created."
+    return response
 
 
 @router.delete("/nurseries/{nursery_id}")
 async def delete_nursery(
     nursery_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     nursery = _get_nursery_or_404(nursery_id, db)
+
+    # Log the deletion before removing
+    log_delete(
+        db, current_user, "nursery", nursery_id,
+        details={
+            "name": nursery.name,
+            "email": nursery.email,
+            "main_city": nursery.main_city
+        },
+        request=request
+    )
 
     db.delete(nursery)
     db.commit()
@@ -378,6 +498,7 @@ async def get_nursery_branches(
 async def create_branch(
     nursery_id: int,
     branch: BranchCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -393,6 +514,19 @@ async def create_branch(
         phone=branch.phone,
     )
     db.add(db_branch)
+    db.flush()
+
+    # Log the branch creation
+    log_create(
+        db, current_user, "branch", db_branch.id,
+        details={
+            "name": db_branch.name,
+            "nursery_id": nursery_id,
+            "city": branch.address.get("city")
+        },
+        request=request
+    )
+
     db.commit()
     db.refresh(db_branch)
     return _format_branch(db_branch)
@@ -414,6 +548,7 @@ async def get_branch(
 async def update_branch(
     branch_id: int,
     branch_update: BranchUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -421,15 +556,28 @@ async def update_branch(
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
 
+    # Track changes
+    changes = {}
     if branch_update.name is not None:
+        changes["name"] = branch_update.name
         branch.name = branch_update.name
     if branch_update.address is not None:
+        changes["address"] = branch_update.address
         branch.address_street = branch_update.address.get("street")
         branch.address_city = branch_update.address.get("city")
         branch.address_governorate = branch_update.address.get("governorate")
         branch.address_postal_code = branch_update.address.get("postalCode")
     if branch_update.phone is not None:
+        changes["phone"] = branch_update.phone
         branch.phone = branch_update.phone
+
+    # Log the branch update
+    if changes:
+        log_update(
+            db, current_user, "branch", branch_id,
+            details={"changes": changes, "nursery_id": branch.nursery_id},
+            request=request
+        )
 
     db.commit()
     db.refresh(branch)
@@ -439,12 +587,24 @@ async def update_branch(
 @router.delete("/branches/{branch_id}")
 async def delete_branch(
     branch_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     branch = db.query(Branch).filter(Branch.id == branch_id).first()
     if not branch:
         raise HTTPException(status_code=404, detail="Branch not found")
+
+    # Log the deletion before removing
+    log_delete(
+        db, current_user, "branch", branch_id,
+        details={
+            "name": branch.name,
+            "nursery_id": branch.nursery_id,
+            "city": branch.address_city
+        },
+        request=request
+    )
 
     db.delete(branch)
     db.commit()
@@ -466,6 +626,7 @@ async def get_branch_classrooms(
 async def create_classroom(
     branch_id: int,
     classroom: ClassroomCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -477,6 +638,19 @@ async def create_classroom(
     classroom_data["branch_id"] = branch_id
     db_classroom = Classroom(**classroom_data)
     db.add(db_classroom)
+    db.flush()
+
+    # Log the classroom creation
+    log_create(
+        db, current_user, "classroom", db_classroom.id,
+        details={
+            "name": db_classroom.name,
+            "branch_id": branch_id,
+            "capacity": db_classroom.capacity
+        },
+        request=request
+    )
+
     db.commit()
     db.refresh(db_classroom)
     return db_classroom
@@ -498,6 +672,7 @@ async def get_classroom(
 async def update_classroom(
     classroom_id: int,
     classroom_update: ClassroomUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
@@ -505,8 +680,19 @@ async def update_classroom(
     if not classroom:
         raise HTTPException(status_code=404, detail="Classroom not found")
 
-    for field, value in classroom_update.dict(exclude_unset=True).items():
+    # Track changes
+    changes = classroom_update.dict(exclude_unset=True)
+
+    for field, value in changes.items():
         setattr(classroom, field, value)
+
+    # Log the classroom update
+    if changes:
+        log_update(
+            db, current_user, "classroom", classroom_id,
+            details={"changes": changes, "branch_id": classroom.branch_id},
+            request=request
+        )
 
     db.commit()
     db.refresh(classroom)
@@ -516,12 +702,24 @@ async def update_classroom(
 @router.delete("/classrooms/{classroom_id}")
 async def delete_classroom(
     classroom_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
     classroom = db.query(Classroom).filter(Classroom.id == classroom_id).first()
     if not classroom:
         raise HTTPException(status_code=404, detail="Classroom not found")
+
+    # Log the deletion before removing
+    log_delete(
+        db, current_user, "classroom", classroom_id,
+        details={
+            "name": classroom.name,
+            "branch_id": classroom.branch_id,
+            "capacity": classroom.capacity
+        },
+        request=request
+    )
 
     db.delete(classroom)
     db.commit()

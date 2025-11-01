@@ -1,5 +1,4 @@
 import axios from 'axios';
-import { getStoredToken, clearToken } from './token';
 
 // Use relative URL in development (proxied by Vite) or VITE_API_URL in production
 const API_BASE = import.meta.env.VITE_API_URL
@@ -11,28 +10,71 @@ export const apiClient = axios.create({
   headers: {
     'Content-Type': 'application/json',
   },
+  withCredentials: true, // Always send cookies (for httpOnly refresh token)
 });
 
 // Default export for easier imports
 export default apiClient;
 
-apiClient.interceptors.request.use((config) => {
-  const token = getStoredToken();
-  if (token) {
-    // eslint-disable-next-line no-param-reassign
-    config.headers.Authorization = `Bearer ${token}`;
-  }
-  return config;
-});
+// Store reference to get current access token
+let getAccessToken = null;
+let refreshAccessTokenFn = null;
 
+/**
+ * Configure API client with access token getter and refresh function
+ * Called from AuthProvider
+ */
+export function configureApiClient(accessTokenGetter, refreshTokenFunction) {
+  getAccessToken = accessTokenGetter;
+  refreshAccessTokenFn = refreshTokenFunction;
+}
+
+// Request interceptor: Add access token to all requests
+apiClient.interceptors.request.use(
+  (config) => {
+    if (getAccessToken) {
+      const token = getAccessToken();
+      if (token) {
+        // eslint-disable-next-line no-param-reassign
+        config.headers.Authorization = `Bearer ${token}`;
+      }
+    }
+    return config;
+  },
+  (error) => Promise.reject(error)
+);
+
+// Response interceptor: Handle 401 errors with automatic token refresh
 apiClient.interceptors.response.use(
   (response) => response,
-  (error) => {
-    if (error.response?.status === 401) {
-      clearToken();
+  async (error) => {
+    const originalRequest = error.config;
+
+    // If 401 error and we haven't retried yet
+    if (error.response?.status === 401 && !originalRequest._retry) {
+      originalRequest._retry = true;
+
+      try {
+        // Try to refresh the access token
+        if (refreshAccessTokenFn) {
+          const newToken = await refreshAccessTokenFn();
+
+          if (newToken) {
+            // Retry the original request with new token
+            originalRequest.headers.Authorization = `Bearer ${newToken}`;
+            return apiClient(originalRequest);
+          }
+        }
+      } catch (refreshError) {
+        // Refresh failed, reject with original error
+        console.error('Token refresh failed:', refreshError);
+        return Promise.reject(error);
+      }
     }
+
+    // For all other errors or if refresh failed
     return Promise.reject(error);
-  },
+  }
 );
 
 export function handleApiError(error) {
@@ -45,6 +87,9 @@ export function handleApiError(error) {
   }
   if (error.response?.status === 404) {
     return 'الصفحة أو المورد المطلوب غير موجود.';
+  }
+  if (error.response?.status === 429) {
+    return 'تم تجاوز الحد الأقصى من المحاولات. الرجاء المحاولة لاحقاً.';
   }
   if (error.response?.status === 500) {
     return 'حدث خطأ في الخادم. الرجاء المحاولة لاحقاً.';

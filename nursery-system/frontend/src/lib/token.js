@@ -1,5 +1,6 @@
 const TOKEN_KEY = 'nursery.token';
 const USER_KEY = 'nursery.user';
+const REFRESH_TOKEN_KEY = 'nursery.refreshToken';
 
 export function getStoredToken() {
   return typeof window !== 'undefined' ? localStorage.getItem(TOKEN_KEY) : null;
@@ -17,6 +18,24 @@ export function storeToken(token) {
 export function clearToken() {
   if (typeof window === 'undefined') return;
   localStorage.removeItem(TOKEN_KEY);
+}
+
+export function getStoredRefreshToken() {
+  return typeof window !== 'undefined' ? localStorage.getItem(REFRESH_TOKEN_KEY) : null;
+}
+
+export function storeRefreshToken(refreshToken) {
+  if (typeof window === 'undefined') return;
+  if (refreshToken) {
+    localStorage.setItem(REFRESH_TOKEN_KEY, refreshToken);
+  } else {
+    localStorage.removeItem(REFRESH_TOKEN_KEY);
+  }
+}
+
+export function clearRefreshToken() {
+  if (typeof window === 'undefined') return;
+  localStorage.removeItem(REFRESH_TOKEN_KEY);
 }
 
 export function storeUser(user) {

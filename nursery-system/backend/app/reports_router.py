@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date, datetime
@@ -9,6 +9,7 @@ from .schemas import (
     BaseResponse, ChildStats, NurseryStats
 )
 from .dependencies import require_admin, require_manager, require_supervisor, require_parent
+from .audit_helper import log_create, log_update, log_delete
 
 router = APIRouter()
 
@@ -38,6 +39,7 @@ async def get_daily_reports(
 @router.post("/", response_model=DailyReportResponse)
 async def create_daily_report(
     report: DailyReportCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -58,6 +60,18 @@ async def create_daily_report(
     # Create daily report
     db_report = DailyReport(**report.dict())
     db.add(db_report)
+    db.flush()
+
+    # Log the daily report creation
+    log_create(
+        db, current_user, "daily_report", db_report.id,
+        details={
+            "child_id": db_report.child_id,
+            "date": str(db_report.date)
+        },
+        request=request
+    )
+
     db.commit()
     db.refresh(db_report)
     return db_report
@@ -78,6 +92,7 @@ async def get_daily_report(
 async def update_daily_report(
     report_id: int,
     report_update: DailyReportUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -86,9 +101,20 @@ async def update_daily_report(
     if not report:
         raise HTTPException(status_code=404, detail="Daily report not found")
 
+    # Track changes
+    changes = report_update.dict(exclude_unset=True)
+
     # Update fields
-    for field, value in report_update.dict(exclude_unset=True).items():
+    for field, value in changes.items():
         setattr(report, field, value)
+
+    # Log the daily report update
+    if changes:
+        log_update(
+            db, current_user, "daily_report", report_id,
+            details={"changes": changes, "child_id": report.child_id},
+            request=request
+        )
 
     db.commit()
     db.refresh(report)
@@ -97,6 +123,7 @@ async def update_daily_report(
 @router.delete("/{report_id}", response_model=BaseResponse)
 async def delete_daily_report(
     report_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -104,6 +131,16 @@ async def delete_daily_report(
     report = db.query(DailyReport).filter(DailyReport.id == report_id).first()
     if not report:
         raise HTTPException(status_code=404, detail="Daily report not found")
+
+    # Log the deletion before removing
+    log_delete(
+        db, current_user, "daily_report", report_id,
+        details={
+            "child_id": report.child_id,
+            "date": str(report.date)
+        },
+        request=request
+    )
 
     db.delete(report)
     db.commit()

@@ -1,14 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from sqlalchemy import func, extract, case
+from sqlalchemy import func, case, and_
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
+import logging
 from .database import get_db
 from .models import User, Nursery, Child, Attendance, DailyReport, RoleEnum, ChildStatus
 from .dependencies import require_admin
 from .schemas import UserResponse
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 @router.get("/analytics")
 async def get_admin_analytics(
@@ -41,14 +43,81 @@ async def get_admin_analytics(
             for role, count in users_by_role
         ]
 
-        # Simple children by age (just count by year)
+        today = datetime.utcnow().date()
+        one_year_ago = today - timedelta(days=365)
+        three_years_ago = today - timedelta(days=365 * 3)
+        five_years_ago = today - timedelta(days=365 * 5)
+
+        age_bucket_query = db.query(
+            func.coalesce(
+                func.sum(
+                    case((Child.date_of_birth >= one_year_ago, 1), else_=0)
+                ),
+                0,
+            ).label("age_0_1"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Child.date_of_birth < one_year_ago,
+                                Child.date_of_birth >= three_years_ago,
+                            ),
+                            1,
+                        ),
+                    ),
+                    else_=0,
+                ),
+                0,
+            ).label("age_1_3"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (
+                            and_(
+                                Child.date_of_birth < three_years_ago,
+                                Child.date_of_birth >= five_years_ago,
+                            ),
+                            1,
+                        ),
+                    ),
+                    else_=0,
+                ),
+                0,
+            ).label("age_3_5"),
+            func.coalesce(
+                func.sum(
+                    case(
+                        (Child.date_of_birth < five_years_ago, 1),
+                    ),
+                    else_=0,
+                ),
+                0,
+            ).label("age_5_plus"),
+        ).filter(Child.status == ChildStatus.ACTIVE)
+
+        age_counts = age_bucket_query.one()
         children_by_age_group = [
-            {"age_group": "Sample", "count": total_children}
+            {"age_group": "0-1 years", "count": int(age_counts.age_0_1 or 0)},
+            {"age_group": "1-3 years", "count": int(age_counts.age_1_3 or 0)},
+            {"age_group": "3-5 years", "count": int(age_counts.age_3_5 or 0)},
+            {"age_group": "5+ years", "count": int(age_counts.age_5_plus or 0)},
         ]
 
-        # Simple governorate data
+        governorate_rows = (
+            db.query(
+                func.coalesce(
+                    func.nullif(func.trim(Nursery.main_governorate), ""),
+                    "Unspecified",
+                ).label("governorate"),
+                func.count(Nursery.id).label("count"),
+            )
+            .group_by("governorate")
+            .all()
+        )
         nurseries_by_governorate = [
-            {"governorate": "Sample", "count": total_nurseries}
+            {"governorate": row.governorate, "count": row.count}
+            for row in governorate_rows
         ]
 
         # Recent logins (users who have logged in recently)
@@ -67,7 +136,7 @@ async def get_admin_analytics(
             for user in recent_logins
         ]
 
-        return {
+        response = {
             "totalNurseries": total_nurseries,
             "activeNurseries": active_nurseries,
             "totalUsers": total_users,
@@ -78,10 +147,16 @@ async def get_admin_analytics(
             "nurseriesByGovernorate": nurseries_by_governorate,
             "recentLogins": recent_logins_data
         }
+        return response
     except Exception as e:
-        # Log the error and return a simple response
-        print(f"Admin analytics error: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        logger.exception("Failed to compute admin analytics")
+        raise HTTPException(
+            status_code=500,
+            detail={
+                "code": "ANALYTICS_ERROR",
+                "message": "Failed to compute analytics summary",
+            },
+        )
 
 @router.get("/system-health")
 async def get_system_health(

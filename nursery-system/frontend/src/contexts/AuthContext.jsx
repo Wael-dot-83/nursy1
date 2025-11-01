@@ -5,189 +5,199 @@ import {
   useEffect,
   useMemo,
   useState,
+  useRef,
 } from 'react';
-import { apiClient, handleApiError } from '../lib/apiClient';
-import {
-  clearToken,
-  clearUser,
-  decodeToken,
-  getRoleFromToken,
-  getStoredToken,
-  getStoredUser,
-  isTokenExpired,
-  storeToken,
-  storeUser,
-} from '../lib/token';
+import { apiClient, handleApiError, configureApiClient } from '../lib/apiClient';
 
 const AuthContext = createContext(null);
 
 export function AuthProvider({ children }) {
-  const [token, setToken] = useState(null);
+  // Store access token in memory only (not localStorage) for security
+  const [accessToken, setAccessToken] = useState(null);
   const [user, setUser] = useState(null);
   const [requiresPasswordChange, setRequiresPasswordChange] = useState(false);
   const [isInitializing, setIsInitializing] = useState(true);
   const [error, setError] = useState(null);
+  const refreshTimeoutRef = useRef(null);
 
+  // Clear all auth state
   const resetAuth = useCallback(() => {
-    clearToken();
-    clearUser();
-    localStorage.removeItem('refreshToken');
-    setToken(null);
+    setAccessToken(null);
     setUser(null);
     setRequiresPasswordChange(false);
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+      refreshTimeoutRef.current = null;
+    }
   }, []);
 
-    const applyAuth = useCallback(({ token: nextToken, refreshToken: nextRefreshToken, user: nextUser, requiresPasswordChange: needPasswordChange }) => {
-    if (!nextToken) {
-      clearToken();
-      clearUser();
-      setToken(null);
-      setUser(null);
-      setRequiresPasswordChange(false);
-      return;
-    }
-    storeToken(nextToken);
-    if (nextRefreshToken) {
-      // Store refresh token securely (you might want to use httpOnly cookies for production)
-      localStorage.setItem('refreshToken', nextRefreshToken);
-    }
-    const payload = nextUser || decodeToken(nextToken);
-    const safeUser = {
-      ...payload,
-      ...nextUser,
-      role: nextUser?.role || getRoleFromToken(nextToken),
-    };
-    storeUser(safeUser);
-    setToken(nextToken);
-    setUser(safeUser);
-    setRequiresPasswordChange(Boolean(needPasswordChange));
-  }, []);
+  // Refresh access token using httpOnly cookie
+  const refreshAccessToken = useCallback(async () => {
+    try {
+      const { data } = await apiClient.post('/auth/refresh', {}, {
+        withCredentials: true, // Send httpOnly cookies
+      });
 
-  useEffect(() => {
-    const storedToken = getStoredToken();
-    if (storedToken && !isTokenExpired(storedToken)) {
-      setToken(storedToken);
-      const storedUser = getStoredUser();
-      if (storedUser) {
-        setUser(storedUser);
-      } else {
-        const payload = decodeToken(storedToken);
-        if (payload) {
-          setUser({ role: payload.role, sub: payload.sub });
-        }
+      if (data.access_token) {
+        setAccessToken(data.access_token);
+        return data.access_token;
       }
-    } else {
+
+      // If refresh fails, logout user
       resetAuth();
+      return null;
+    } catch (err) {
+      console.error('Token refresh failed:', err);
+      resetAuth();
+      return null;
     }
-    setIsInitializing(false);
   }, [resetAuth]);
 
+  // Schedule automatic token refresh before expiry
+  const scheduleTokenRefresh = useCallback((expiresIn) => {
+    if (refreshTimeoutRef.current) {
+      clearTimeout(refreshTimeoutRef.current);
+    }
+
+    // Refresh 1 minute before expiry (expiresIn is in seconds)
+    const refreshTime = (expiresIn - 60) * 1000;
+
+    if (refreshTime > 0) {
+      refreshTimeoutRef.current = setTimeout(() => {
+        refreshAccessToken();
+      }, refreshTime);
+    }
+  }, [refreshAccessToken]);
+
+  // Login with email and password
   const loginWithPassword = useCallback(async ({ email, password }) => {
     try {
-      const { data } = await apiClient.post('/auth/login', { email, password });
-      // Backend returns { access_token, token_type, refresh_token }
-      applyAuth({
-        token: data.access_token,
-        refreshToken: data.refresh_token,
-        user: null, // Will be decoded from token
-        requiresPasswordChange: false, // Backend doesn't provide this
+      const { data } = await apiClient.post('/auth/login', { email, password }, {
+        withCredentials: true, // Enable cookies
       });
+
+      // Backend returns { access_token, token_type, expires_in, user }
+      // Refresh token is in httpOnly cookie
+      setAccessToken(data.access_token);
+      setUser(data.user);
+      setRequiresPasswordChange(false);
       setError(null);
+
+      // Schedule automatic token refresh
+      if (data.expires_in) {
+        scheduleTokenRefresh(data.expires_in);
+      }
+
       return data;
     } catch (err) {
       const message = handleApiError(err);
       setError(message);
       throw new Error(message);
     }
-  }, [applyAuth]);
+  }, [scheduleTokenRefresh]);
 
-  const requestOtp = useCallback(async ({ email, purpose = 'login' }) => {
-    try {
-      await apiClient.post('/auth/otp/request', { email, purpose });
-      setError(null);
-    } catch (err) {
-      const message = handleApiError(err);
-      setError(message);
-      throw new Error(message);
-    }
-  }, []);
-
-  const verifyOtp = useCallback(async ({ email, code, purpose = 'login' }) => {
-    try {
-      const { data } = await apiClient.post('/auth/otp/verify', { email, code, purpose });
-      // Backend returns { access_token, token_type, refresh_token }
-      applyAuth({
-        token: data.access_token,
-        refreshToken: data.refresh_token,
-        user: null, // Will be decoded from token
-        requiresPasswordChange: false, // Backend doesn't provide this
-      });
-      setError(null);
-      return data;
-    } catch (err) {
-      const message = handleApiError(err);
-      setError(message);
-      throw new Error(message);
-    }
-  }, [applyAuth]);
-
+  // Change password
   const changePassword = useCallback(async ({ currentPassword, newPassword }) => {
     try {
       const { data } = await apiClient.post('/auth/password/change', {
-        currentPassword,
-        newPassword,
+        current_password: currentPassword,
+        new_password: newPassword,
       });
-      if (data?.user && token) {
-        applyAuth({ token, user: data.user, requiresPasswordChange: false });
-      } else {
-        setRequiresPasswordChange(false);
-      }
+
+      // After password change, user needs to login again
+      setRequiresPasswordChange(false);
+
       return data;
     } catch (err) {
       throw new Error(handleApiError(err));
     }
-  }, [applyAuth, token]);
+  }, []);
 
-  const logout = useCallback(() => {
-    resetAuth();
+  // Logout
+  const logout = useCallback(async () => {
+    try {
+      await apiClient.post('/auth/logout', {}, {
+        withCredentials: true, // Send cookies for token revocation
+      });
+    } catch (err) {
+      console.error('Logout error:', err);
+    } finally {
+      resetAuth();
+    }
   }, [resetAuth]);
 
+  // Update user info
   const updateUser = useCallback((nextUser) => {
     const merged = { ...user, ...nextUser };
     setUser(merged);
-    storeUser(merged);
   }, [user]);
 
+  // Configure API client with token getter and refresh function
+  useEffect(() => {
+    configureApiClient(
+      () => accessToken,
+      refreshAccessToken
+    );
+  }, [accessToken, refreshAccessToken]);
+
+  // Try to refresh token on mount
+  useEffect(() => {
+    const initializeAuth = async () => {
+      try {
+        // Try to refresh token from httpOnly cookie
+        const token = await refreshAccessToken();
+
+        if (token) {
+          // Get user info with the refreshed token
+          const { data: userData } = await apiClient.get('/auth/me');
+          setUser(userData);
+        }
+      } catch (err) {
+        console.error('Auth initialization failed:', err);
+        resetAuth();
+      } finally {
+        setIsInitializing(false);
+      }
+    };
+
+    initializeAuth();
+  }, [refreshAccessToken, resetAuth]);
+
+  // Cleanup timeout on unmount
+  useEffect(() => {
+    return () => {
+      if (refreshTimeoutRef.current) {
+        clearTimeout(refreshTimeoutRef.current);
+      }
+    };
+  }, []);
+
   const value = useMemo(() => ({
-    token,
+    accessToken,
     user,
     role: user?.role,
-    isAuthenticated: Boolean(token),
+    isAuthenticated: Boolean(accessToken && user),
     isInitializing,
     requiresPasswordChange,
     error,
     actions: {
       loginWithPassword,
-      requestOtp,
-      verifyOtp,
       changePassword,
       logout,
       updateUser,
-      applyAuth,
+      refreshAccessToken,
     },
   }), [
-    token,
+    accessToken,
     user,
     isInitializing,
     requiresPasswordChange,
     error,
     loginWithPassword,
-    requestOtp,
-    verifyOtp,
     changePassword,
     logout,
     updateUser,
-    applyAuth,
+    refreshAccessToken,
   ]);
 
   return (

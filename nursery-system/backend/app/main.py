@@ -1,40 +1,35 @@
-from fastapi import FastAPI, Depends, Request
-from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import JSONResponse
-from sqlalchemy.orm import Session
-from slowapi.errors import RateLimitExceeded
-from .database import engine, get_db
-from .models import Base
-from .settings import settings
-from .middleware.rate_limiter import limiter, rate_limit_exceeded_handler
-from .auth_router import router as auth_router
-from .nursery_router import router as nursery_router
-from .user_router import router as user_router
-from .children_router import router as children_router
-from .attendance_router import router as attendance_router
-from .reports_router import router as reports_router
-from .admin_router import router as admin_router
-from .file_router import router as file_router
-from .notification_router import router as notification_router
-from .audit_router import router as audit_router
-from .settings_router import router as settings_router
-from .backup_router import router as backup_router
-from .dependencies import get_current_user
+from __future__ import annotations
+
 import logging
+from datetime import datetime
+from typing import Iterable, Tuple
 
-# Configure logging
-logging.basicConfig(
-    level=getattr(logging, settings.log_level),
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s',
-    handlers=[
-        logging.FileHandler(settings.log_file),
-        logging.StreamHandler()
-    ]
-)
+from fastapi import FastAPI
+from fastapi.middleware.cors import CORSMiddleware
+
+from .auth_router import router as auth_router
+from .attendance_router import router as attendance_router
+from .backup_router import router as backup_router
+from .children_router import router as children_router
+from .errors import register_exception_handlers
+from .file_router import router as file_router
+from .logging_config import configure_logging
+from .middleware import RequestIdMiddleware
+from .notification_router import router as notification_router
+from .nursery_router import router as nursery_router
+from .reports_router import router as reports_router
+from .settings import settings
+from .settings_router import router as settings_router
+from .admin_router import router as admin_router
+from .user_router import router as user_router
+from .audit_router import router as audit_router
+from .manager_router import router as manager_router
+from .parent_router import router as parent_router
+from .supervisor_router import router as supervisor_router
+
+# Initialise application logging before creating any loggers.
+configure_logging()
 logger = logging.getLogger(__name__)
-
-# Create database tables
-# Base.metadata.create_all(bind=engine)
 
 app = FastAPI(
     title="Nursery Management System API",
@@ -42,80 +37,76 @@ app = FastAPI(
     version=settings.version,
     docs_url="/docs" if settings.debug else None,
     redoc_url="/redoc" if settings.debug else None,
-    debug=settings.debug
+    debug=settings.debug,
 )
 
-print("FastAPI app created successfully")
-
-# Add rate limiter to app state
-# app.state.limiter = limiter
-# app.add_exception_handler(RateLimitExceeded, rate_limit_exceeded_handler)
-
-print("Adding CORS middleware...")
-# CORS - Use settings instead of allowing all origins
+# Middleware stack ---------------------------------------------------------
+app.add_middleware(RequestIdMiddleware)
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],  # Temporarily restrict to frontend only
+    allow_origins=settings.get_cors_origins_list(),
     allow_credentials=True,
     allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"],
     allow_headers=["*"],
-    expose_headers=["*"]
+    expose_headers=["*"],
+    max_age=3600,
 )
 
-print("Including routers...")
-# Include routers
-try:
-    app.include_router(auth_router, prefix="/auth", tags=["Authentication"])
-    print("[OK] Auth router included")
-    app.include_router(nursery_router, prefix="/admin", tags=["Nurseries"])
-    print("[OK] Nursery router included")
-    app.include_router(user_router, prefix="/admin/users", tags=["Users"])
-    print("[OK] User router included")
-    app.include_router(children_router, prefix="/children", tags=["Children"])
-    print("[OK] Children router included")
-    app.include_router(attendance_router, prefix="/attendance", tags=["Attendance"])
-    print("[OK] Attendance router included")
-    app.include_router(reports_router, prefix="/reports", tags=["Reports"])
-    print("[OK] Reports router included")
-    app.include_router(admin_router, prefix="/system", tags=["Admin"])
-    print("[OK] Admin router included")
-    app.include_router(file_router, prefix="/files", tags=["Files"])
-    print("[OK] File router included")
-    app.include_router(notification_router, prefix="/notifications", tags=["Notifications"])
-    print("[OK] Notification router included")
-    app.include_router(audit_router, prefix="/audit-logs", tags=["Audit Logs"])
-    print("[OK] Audit router included")
-    app.include_router(settings_router, prefix="/admin/settings", tags=["Settings"])
-    print("[OK] Settings router included")
-    app.include_router(backup_router, prefix="/admin/backup", tags=["Backup"])
-    print("[OK] Backup router included")
-    print("[SUCCESS] All routers included successfully")
-except Exception as e:
-    print(f"[ERROR] Error including routers: {e}")
-    import traceback
-    traceback.print_exc()
+# Structured error handling ------------------------------------------------
+register_exception_handlers(app)
+
+# Router registration ------------------------------------------------------
+_ROUTERS: Iterable[Tuple] = (
+    (auth_router, "/auth", ["Authentication"]),
+    (nursery_router, "/admin", ["Nurseries"]),
+    (user_router, "/admin/users", ["Users"]),
+    (manager_router, "/manager", ["Manager"]),
+    (parent_router, "/parent", ["Parent"]),
+    (supervisor_router, "/supervisor", ["Supervisor"]),
+    (children_router, "/children", ["Children"]),
+    (attendance_router, "/attendance", ["Attendance"]),
+    (reports_router, "/reports", ["Reports"]),
+    (admin_router, "/system", ["Admin"]),
+    (file_router, "/files", ["Files"]),
+    (notification_router, "/notifications", ["Notifications"]),
+    (audit_router, "/audit-logs", ["Audit Logs"]),
+    (settings_router, "/admin/settings", ["Settings"]),
+    (backup_router, "/admin/backup", ["Backup"]),
+)
+
+for router, prefix, tags in _ROUTERS:
+    try:
+        app.include_router(router, prefix=prefix, tags=tags)
+        logger.debug(
+            "Router registered",
+            extra={"router_prefix": prefix, "router_tags": tags},
+        )
+    except Exception:  # pragma: no cover - defensive guard
+        logger.exception("Failed to register router", extra={"router_prefix": prefix})
+        raise
+
 
 @app.get("/")
-async def root():
-    return {"message": "Nursery Management System API", "version": "1.0.0"}
+async def root() -> dict[str, str]:
+    """Basic readiness probe."""
+    return {"message": "Nursery Management System API", "version": settings.version}
+
 
 @app.get("/health")
-async def health_check():
-    from datetime import datetime
+async def health_check() -> dict[str, str]:
+    """Simple health endpoint for uptime checks."""
     return {
         "status": "healthy",
-        "timestamp": datetime.utcnow().isoformat()
+        "timestamp": datetime.utcnow().isoformat(),
     }
 
-@app.get("/protected")
-async def protected_route():
-    return {"message": "This should work without auth"}
 
-if __name__ == "__main__":
+if __name__ == "__main__":  # pragma: no cover
     import uvicorn
+
     uvicorn.run(
         "app.main:app",
         host="0.0.0.0",
         port=8000,
-        reload=False
+        reload=False,
     )

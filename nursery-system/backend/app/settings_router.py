@@ -1,13 +1,14 @@
 """
 Settings router for system configuration
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import Optional, Dict, Any
 from .database import get_db
 from .dependencies import require_admin
 from .models import User
 from .schemas import BaseResponse
+from .audit_helper import log_settings_change, log_create, log_update, log_delete
 import json
 import os
 
@@ -80,6 +81,8 @@ async def get_security_settings(
 @router.patch("/security")
 async def update_security_settings(
     updates: Dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Update security settings (Admin only)"""
@@ -96,6 +99,15 @@ async def update_security_settings(
             settings["security"][key] = value
 
     save_settings(settings)
+
+    # Log the settings change
+    log_settings_change(
+        db, current_user, "security",
+        details={"updates": updates},
+        request=request
+    )
+    db.commit()
+
     return {"message": "Security settings updated", "security": settings["security"]}
 
 @router.get("/organization")
@@ -109,6 +121,8 @@ async def get_organization_settings(
 @router.patch("/organization")
 async def update_organization_settings(
     updates: Dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Update organization settings (Admin only)"""
@@ -125,6 +139,15 @@ async def update_organization_settings(
             settings["organization"][key] = value
 
     save_settings(settings)
+
+    # Log the settings change
+    log_settings_change(
+        db, current_user, "organization",
+        details={"updates": updates},
+        request=request
+    )
+    db.commit()
+
     return {"message": "Organization settings updated", "organization": settings["organization"]}
 
 @router.get("/governorates")
@@ -136,6 +159,8 @@ async def get_governorates():
 @router.post("/governorates")
 async def add_governorate(
     governorate_data: Dict[str, str],
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Add a new governorate (Admin only)"""
@@ -152,11 +177,21 @@ async def add_governorate(
         settings["governorates"].append(governorate)
         save_settings(settings)
 
+        # Log the settings change
+        log_create(
+            db, current_user, "governorate", None,
+            details={"name": governorate},
+            request=request
+        )
+        db.commit()
+
     return {"message": "Governorate added", "governorates": settings["governorates"]}
 
 @router.delete("/governorates/{governorate}")
 async def delete_governorate(
     governorate: str,
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Delete a governorate (Admin only)"""
@@ -165,6 +200,14 @@ async def delete_governorate(
     if "governorates" in settings and governorate in settings["governorates"]:
         settings["governorates"].remove(governorate)
         save_settings(settings)
+
+        # Log the settings change
+        log_delete(
+            db, current_user, "governorate", None,
+            details={"name": governorate},
+            request=request
+        )
+        db.commit()
 
     return {"message": "Governorate deleted", "governorates": settings.get("governorates", [])}
 
@@ -177,6 +220,8 @@ async def get_age_categories():
 @router.post("/age-categories")
 async def add_age_category(
     category_data: Dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Add a new age category (Admin only)"""
@@ -188,12 +233,22 @@ async def add_age_category(
     settings["age_categories"].append(category_data)
     save_settings(settings)
 
+    # Log the settings change
+    log_create(
+        db, current_user, "age_category", None,
+        details=category_data,
+        request=request
+    )
+    db.commit()
+
     return {"message": "Age category added", "age_categories": settings["age_categories"]}
 
 @router.put("/age-categories/{category_id}")
 async def update_age_category(
     category_id: str,
     category_data: Dict[str, Any],
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Update an age category (Admin only)"""
@@ -204,6 +259,15 @@ async def update_age_category(
             if cat.get("id") == category_id:
                 settings["age_categories"][i] = category_data
                 save_settings(settings)
+
+                # Log the settings change
+                log_update(
+                    db, current_user, "age_category", None,
+                    details={"category_id": category_id, "updates": category_data},
+                    request=request
+                )
+                db.commit()
+
                 return {"message": "Age category updated", "age_categories": settings["age_categories"]}
 
     raise HTTPException(status_code=404, detail="Age category not found")
@@ -211,6 +275,8 @@ async def update_age_category(
 @router.delete("/age-categories/{category_id}")
 async def delete_age_category(
     category_id: str,
+    request: Request,
+    db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
     """Delete an age category (Admin only)"""
@@ -219,5 +285,13 @@ async def delete_age_category(
     if "age_categories" in settings:
         settings["age_categories"] = [cat for cat in settings["age_categories"] if cat.get("id") != category_id]
         save_settings(settings)
+
+        # Log the settings change
+        log_delete(
+            db, current_user, "age_category", None,
+            details={"category_id": category_id},
+            request=request
+        )
+        db.commit()
 
     return {"message": "Age category deleted", "age_categories": settings.get("age_categories", [])}

@@ -34,6 +34,7 @@ class User(Base):
     role = Column(Enum(RoleEnum), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     hashed_password = Column(String(255), nullable=True)
+    temp_password = Column(String(255), nullable=True)  # Temporary password for display/management
     nursery_id = Column(Integer, ForeignKey("nurseries.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -264,4 +265,21 @@ class AuditLog(Base):
         Index('idx_audit_logs_action', 'action'),
         Index('idx_audit_logs_resource', 'resource_type', 'resource_id'),
         Index('idx_audit_logs_created', 'created_at'),
+    )
+
+class LoginAttempt(Base):
+    """Track login attempts for brute-force protection"""
+    __tablename__ = "login_attempts"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    email = Column(String(150), nullable=False)
+    ip_address = Column(String(45), nullable=False)
+    success = Column(Boolean, default=False, nullable=False)
+    failure_reason = Column(String(200), nullable=True)  # Invalid credentials, account locked, etc.
+    attempted_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    __table_args__ = (
+        Index('idx_login_attempts_email', 'email'),
+        Index('idx_login_attempts_ip', 'ip_address'),
+        Index('idx_login_attempts_attempted_at', 'attempted_at'),
     )

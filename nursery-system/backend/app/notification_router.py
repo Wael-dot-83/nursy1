@@ -1,7 +1,7 @@
 """
 Notifications router
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import datetime
@@ -10,6 +10,7 @@ from .database import get_db
 from .dependencies import get_current_user, require_admin
 from .models import Notification, User
 from .schemas import NotificationCreate, NotificationResponse, BaseResponse
+from .audit_helper import log_create, log_audit
 import logging
 
 logger = logging.getLogger(__name__)
@@ -143,6 +144,7 @@ async def delete_notification(
 @router.post("/", response_model=NotificationResponse)
 async def create_notification(
     notification: NotificationCreate,
+    request: Request,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
@@ -165,6 +167,19 @@ async def create_notification(
         )
 
         db.add(db_notification)
+        db.flush()
+
+        # Log the notification creation
+        log_create(
+            db, current_user, "notification", db_notification.id,
+            details={
+                "user_id": notification.user_id,
+                "type": notification.type,
+                "title": notification.title
+            },
+            request=request
+        )
+
         db.commit()
         db.refresh(db_notification)
 
@@ -190,6 +205,7 @@ async def broadcast_notification(
     type: str = "info",
     link: Optional[str] = None,
     role: Optional[str] = None,
+    request: Request = None,
     current_user: User = Depends(require_admin),
     db: Session = Depends(get_db)
 ):
@@ -214,6 +230,19 @@ async def broadcast_notification(
             notifications.append(notification)
 
         db.bulk_save_objects(notifications)
+
+        # Log the broadcast operation
+        log_audit(
+            db, current_user, "broadcast", "notification", None,
+            details={
+                "title": title,
+                "type": type,
+                "role": role,
+                "recipients_count": len(notifications)
+            },
+            request=request
+        )
+
         db.commit()
 
         logger.info(f"Broadcast notification sent to {len(notifications)} users")

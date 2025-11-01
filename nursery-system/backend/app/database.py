@@ -1,10 +1,10 @@
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy.pool import StaticPool
-import os
 
-# Database URL
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./nursery.db")
+from .settings import settings
+
+# Database URL sourced from configuration
+DATABASE_URL = settings.database_url
 
 # Create engine
 # Note: check_same_thread is only needed for SQLite

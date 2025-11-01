@@ -718,6 +718,7 @@ export default function UserManagement() {
   const [showTempModal, setShowTempModal] = useState(false);
   const [confirmAction, setConfirmAction] = useState(null);
   const [bulkLoading, setBulkLoading] = useState(null);
+  const [visiblePasswords, setVisiblePasswords] = useState(() => new Set());
 
   const currentUserId = currentUser?.id ?? currentUser?.sub ?? null;
   const canManageUsers = currentUser?.role === USER_ROLES.ADMIN;
@@ -1243,6 +1244,9 @@ export default function UserManagement() {
                   <SortableHeader label="الحالة" field="isActive" sort={sort} onSort={handleSort} align="center" />
                   <SortableHeader label="آخر دخول" field="lastLogin" sort={sort} onSort={handleSort} />
                   <SortableHeader label="تاريخ الإنشاء" field="createdAt" sort={sort} onSort={handleSort} />
+                  <th scope="col" className="sticky top-0 z-10 bg-slate-50 px-6 py-3 text-center text-sm font-semibold text-slate-600">
+                    كلمة المرور
+                  </th>
                   <th scope="col" className="sticky top-0 z-10 px-6 py-3 text-center text-sm font-semibold text-slate-600">
                     الإجراءات
                   </th>
@@ -1308,6 +1312,39 @@ export default function UserManagement() {
                       </td>
                       <td className="px-6 py-4 align-middle text-right text-sm text-slate-600">
                         {formatDateTime(createdAtLabel, { fallback: 'غير متوفر', withTime: false })}
+                      </td>
+                      <td className="px-6 py-4 text-center align-middle">
+                        {user.tempPassword ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="font-mono text-xs text-slate-700">
+                              {visiblePasswords.has(userId) ? user.tempPassword : '••••••••'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVisiblePasswords((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(userId)) {
+                                    next.delete(userId);
+                                  } else {
+                                    next.add(userId);
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-primary-600"
+                              title={visiblePasswords.has(userId) ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                            >
+                              {visiblePasswords.has(userId) ? (
+                                <EyeSlashIcon className="h-4 w-4" />
+                              ) : (
+                                <EyeIcon className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">غير متوفر</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-center align-middle">
                         <UserRowActions

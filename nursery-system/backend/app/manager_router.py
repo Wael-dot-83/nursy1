@@ -2,7 +2,7 @@
 Manager-specific API endpoints
 Provides role-specific routes that wrap existing generic endpoints
 """
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from sqlalchemy import func, desc
 from typing import List, Optional, Dict, Any
@@ -12,6 +12,7 @@ from .database import get_db
 from .models import User, Nursery, Branch, Child, Classroom, DailyReport, Attendance, RoleEnum
 from .schemas import UserResponse, BaseResponse
 from .dependencies import require_manager
+from .audit_helper import log_create, log_update, log_delete
 
 router = APIRouter()
 
@@ -103,6 +104,7 @@ async def get_manager_nursery(
 async def update_manager_nursery(
     nursery_id: int,
     nursery_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager)
 ):
@@ -114,17 +116,34 @@ async def update_manager_nursery(
     if not nursery:
         raise HTTPException(status_code=404, detail="Nursery not found")
 
+    # Track changes for audit
+    changes = {}
+    old_values = {}
+
     # Update fields
-    if "phone" in nursery_data:
+    if "phone" in nursery_data and nursery_data["phone"] != nursery.main_phone:
+        old_values["phone"] = nursery.main_phone
         nursery.main_phone = nursery_data["phone"]
-    if "email" in nursery_data:
+        changes["phone"] = nursery_data["phone"]
+    if "email" in nursery_data and nursery_data["email"] != nursery.email:
+        old_values["email"] = nursery.email
         nursery.email = nursery_data["email"]
+        changes["email"] = nursery_data["email"]
     if "address" in nursery_data:
         address = nursery_data["address"]
         nursery.main_street = address.get("street")
         nursery.main_city = address.get("city")
         nursery.main_governorate = address.get("governorate")
         nursery.main_postal_code = address.get("postalCode")
+        changes["address"] = address
+
+    # Log the update
+    if changes:
+        log_update(
+            db, current_user, "nursery", nursery_id,
+            details={"changes": changes, "old_values": old_values},
+            request=request
+        )
 
     db.commit()
     db.refresh(nursery)
@@ -177,6 +196,7 @@ async def get_manager_children(
 @router.post("/parents")
 async def create_parent(
     parent_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager)
 ):
@@ -222,6 +242,15 @@ async def create_parent(
     )
 
     db.add(new_parent)
+    db.flush()
+
+    # Log the parent creation
+    log_create(
+        db, current_user, "user", new_parent.id,
+        details={"email": email, "role": "parent", "nursery_id": current_user.nursery_id},
+        request=request
+    )
+
     db.commit()
     db.refresh(new_parent)
 
@@ -237,6 +266,7 @@ async def create_parent(
 @router.post("/children")
 async def create_child(
     child_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager)
 ):
@@ -295,6 +325,20 @@ async def create_child(
     )
 
     db.add(new_child)
+    db.flush()
+
+    # Log the child creation
+    log_create(
+        db, current_user, "child", new_child.id,
+        details={
+            "full_name": full_name,
+            "parent_id": parent_id,
+            "classroom_id": classroom.id,
+            "nursery_id": current_user.nursery_id
+        },
+        request=request
+    )
+
     db.commit()
     db.refresh(new_child)
 
@@ -346,6 +390,7 @@ async def get_supervisors(
 @router.post("/supervisors")
 async def create_supervisor(
     supervisor_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager)
 ):
@@ -391,6 +436,15 @@ async def create_supervisor(
     )
 
     db.add(new_supervisor)
+    db.flush()
+
+    # Log the supervisor creation
+    log_create(
+        db, current_user, "user", new_supervisor.id,
+        details={"email": email, "role": "supervisor", "nursery_id": current_user.nursery_id},
+        request=request
+    )
+
     db.commit()
     db.refresh(new_supervisor)
 
@@ -407,6 +461,7 @@ async def create_supervisor(
 async def update_supervisor(
     supervisor_id: int,
     supervisor_data: dict,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager)
 ):
@@ -423,16 +478,37 @@ async def update_supervisor(
     if not supervisor:
         raise HTTPException(status_code=404, detail="Supervisor not found")
 
+    # Track changes for audit
+    changes = {}
+    old_values = {}
+
     # Update fields
     if "fullName" in supervisor_data:
+        old_full_name = f"{supervisor.first_name} {supervisor.last_name}"
         name_parts = supervisor_data["fullName"].strip().split(maxsplit=1)
         supervisor.first_name = name_parts[0] if len(name_parts) > 0 else ""
         supervisor.last_name = name_parts[1] if len(name_parts) > 1 else ""
+        new_full_name = f"{supervisor.first_name} {supervisor.last_name}"
+        if old_full_name != new_full_name:
+            old_values["fullName"] = old_full_name
+            changes["fullName"] = new_full_name
 
-    if "email" in supervisor_data:
+    if "email" in supervisor_data and supervisor_data["email"] != supervisor.email:
+        old_values["email"] = supervisor.email
         supervisor.email = supervisor_data["email"]
-    if "phone" in supervisor_data:
+        changes["email"] = supervisor_data["email"]
+    if "phone" in supervisor_data and supervisor_data["phone"] != supervisor.phone:
+        old_values["phone"] = supervisor.phone
         supervisor.phone = supervisor_data["phone"]
+        changes["phone"] = supervisor_data["phone"]
+
+    # Log the update
+    if changes:
+        log_update(
+            db, current_user, "user", supervisor_id,
+            details={"changes": changes, "old_values": old_values},
+            request=request
+        )
 
     db.commit()
     db.refresh(supervisor)
@@ -448,6 +524,7 @@ async def update_supervisor(
 @router.delete("/supervisors/{supervisor_id}")
 async def delete_supervisor(
     supervisor_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_manager)
 ):
@@ -463,6 +540,17 @@ async def delete_supervisor(
 
     if not supervisor:
         raise HTTPException(status_code=404, detail="Supervisor not found")
+
+    # Log the deletion before removing
+    log_delete(
+        db, current_user, "user", supervisor_id,
+        details={
+            "email": supervisor.email,
+            "role": "supervisor",
+            "full_name": f"{supervisor.first_name} {supervisor.last_name}"
+        },
+        request=request
+    )
 
     db.delete(supervisor)
     db.commit()

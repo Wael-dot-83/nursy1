@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from typing import List, Optional
 from .database import get_db
@@ -8,6 +8,7 @@ from .schemas import (
     BaseResponse
 )
 from .dependencies import require_admin, require_manager, require_supervisor, require_parent
+from .audit_helper import log_create, log_update, log_delete
 
 router = APIRouter()
 
@@ -37,6 +38,7 @@ async def get_children(
 @router.post("/", response_model=ChildResponse)
 async def create_child(
     child: ChildCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -54,6 +56,20 @@ async def create_child(
     # Create child
     db_child = Child(**child.dict())
     db.add(db_child)
+    db.flush()
+
+    # Log the child creation
+    log_create(
+        db, current_user, "child", db_child.id,
+        details={
+            "first_name": db_child.first_name,
+            "last_name": db_child.last_name,
+            "classroom_id": db_child.classroom_id,
+            "parent_id": db_child.parent_id
+        },
+        request=request
+    )
+
     db.commit()
     db.refresh(db_child)
     return db_child
@@ -74,6 +90,7 @@ async def get_child(
 async def update_child(
     child_id: int,
     child_update: ChildUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -88,9 +105,20 @@ async def update_child(
         if not classroom:
             raise HTTPException(status_code=404, detail="Classroom not found")
 
+    # Track changes
+    changes = child_update.dict(exclude_unset=True)
+
     # Update fields
-    for field, value in child_update.dict(exclude_unset=True).items():
+    for field, value in changes.items():
         setattr(child, field, value)
+
+    # Log the child update
+    if changes:
+        log_update(
+            db, current_user, "child", child_id,
+            details={"changes": changes, "parent_id": child.parent_id},
+            request=request
+        )
 
     db.commit()
     db.refresh(child)
@@ -99,6 +127,7 @@ async def update_child(
 @router.delete("/{child_id}", response_model=BaseResponse)
 async def delete_child(
     child_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin)
 ):
@@ -106,6 +135,18 @@ async def delete_child(
     child = db.query(Child).filter(Child.id == child_id).first()
     if not child:
         raise HTTPException(status_code=404, detail="Child not found")
+
+    # Log the deletion before removing
+    log_delete(
+        db, current_user, "child", child_id,
+        details={
+            "first_name": child.first_name,
+            "last_name": child.last_name,
+            "classroom_id": child.classroom_id,
+            "parent_id": child.parent_id
+        },
+        request=request
+    )
 
     db.delete(child)
     db.commit()
