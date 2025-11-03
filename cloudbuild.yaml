@@ -1,0 +1,73 @@
+# cloudbuild.yaml
+# This file instructs Google Cloud Build on how to build and deploy the application.
+
+steps:
+  # Build the backend container image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Build Backend Image'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/nursy-477121/nursy-repo/nursy-backend:$COMMIT_SHA'
+      - '--file=nursery-system/backend/Dockerfile.production'
+      - './nursery-system/backend'
+
+  # Build the frontend container image
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Build Frontend Image'
+    args:
+      - 'build'
+      - '-t'
+      - 'us-central1-docker.pkg.dev/nursy-477121/nursy-repo/nursy-frontend:$COMMIT_SHA'
+      - '--build-arg'
+      - 'VITE_API_URL=https://nursy-backend-placeholder.a.run.app' # Placeholder URL
+      - '--file=nursery-system/frontend/Dockerfile.production'
+      - './nursery-system/frontend'
+
+  # Push the container images to Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    id: 'Push Images'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/nursy-477121/nursy-repo/nursy-backend:$COMMIT_SHA'
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - 'us-central1-docker.pkg.dev/nursy-477121/nursy-repo/nursy-frontend:$COMMIT_SHA'
+
+  # Deploy the backend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'Deploy Backend'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'nursy-backend'
+      - '--image=us-central1-docker.pkg.dev/nursy-477121/nursy-repo/nursy-backend:$COMMIT_SHA'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+      - '--port=8002'
+      # The following environment variables are placeholders.
+      # We will replace them with the actual values from Secret Manager later.
+      - '--set-env-vars=DATABASE_URL=$$DATABASE_URL,REDIS_URL=$$REDIS_URL,JWT_SECRET_KEY=$$JWT_SECRET_KEY,ENVIRONMENT=production,LOG_LEVEL=INFO'
+
+  # Deploy the frontend to Cloud Run
+  - name: 'gcr.io/google.com/cloudsdktool/cloud-sdk'
+    id: 'Deploy Frontend'
+    entrypoint: 'gcloud'
+    args:
+      - 'run'
+      - 'deploy'
+      - 'nursy-frontend'
+      - '--image=us-central1-docker.pkg.dev/nursy-477121/nursy-repo/nursy-frontend:$COMMIT_SHA'
+      - '--region=us-central1'
+      - '--platform=managed'
+      - '--allow-unauthenticated'
+
+images:
+  - 'us-central1-docker.pkg.dev/nursy-477121/nursy-repo/nursy-backend:$COMMIT_SHA'
+  - 'us-central1-docker.pkg.dev/nursy-477121/nursy-repo/nursy-frontend:$COMMIT_SHA'
+
+options:
+  logging: CLOUD_LOGGING_ONLY
