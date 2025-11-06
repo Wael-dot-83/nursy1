@@ -1,0 +1,52 @@
+name: Accessibility Verification
+
+on:
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'nursery-system/frontend/src/**'
+      - 'patches/**'
+      - '.github/workflows/a11y.yml'
+
+jobs:
+  a11y-verify:
+    runs-on: ubuntu-latest
+    
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+      
+      - name: Setup Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '18'
+          cache: 'npm'
+          cache-dependency-path: nursery-system/frontend/package-lock.json
+      
+      - name: Install dependencies
+        working-directory: nursery-system/frontend
+        run: npm ci
+      
+      - name: Run linter
+        working-directory: nursery-system/frontend
+        run: npm run lint
+      
+      - name: Run tests
+        working-directory: nursery-system/frontend
+        run: npm test -- --ci --coverage
+      
+      - name: Verify accessibility implementation
+        run: |
+          if [ -f "patches/verify-patches.sh" ]; then
+            bash patches/verify-patches.sh
+          else
+            echo "Verification script not found, skipping"
+          fi
+      
+      - name: Check a11y status
+        run: |
+          if command -v make &> /dev/null && make -n a11y &> /dev/null; then
+            make a11y
+          else
+            echo "make a11y not available, skipping"
+          fi
