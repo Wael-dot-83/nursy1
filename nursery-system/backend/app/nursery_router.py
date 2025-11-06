@@ -209,8 +209,9 @@ async def create_nursery(
     ) -> User:
         user = User(
             email=email,
+            username=email,
             hashed_password=hash_password(password),
-            temp_password=password,  # Store temp password for display
+            temp_password=password,
             first_name=first_name,
             last_name=last_name,
             phone=phone,
@@ -408,7 +409,9 @@ async def update_nursery(
             )
             user = User(
                 email=branch_email,
+                username=branch_email,
                 hashed_password=hash_password(branch_password),
+                temp_password=branch_password,
                 first_name="Manager",
                 last_name=nursery.name,
                 phone=branch.phone or nursery.main_phone,
