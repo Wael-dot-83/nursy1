@@ -5,7 +5,7 @@ export default function ParentDashboard() {
   const childrenQuery = useQuery({
     queryKey: ['parent-children'],
     queryFn: async () => {
-      const response = await apiClient.get('/parent/children');
+      const response = await apiClient.get('/api/parent/children');
       return response.data;
     },
   });
@@ -13,7 +13,7 @@ export default function ParentDashboard() {
   const notificationsQuery = useQuery({
     queryKey: ['parent-notifications'],
     queryFn: async () => {
-      const response = await apiClient.get('/parent/notifications');
+      const response = await apiClient.get('/api/parent/notifications');
       return response.data;
     },
   });

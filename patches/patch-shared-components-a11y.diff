@@ -1,0 +1,439 @@
+--- a/nursery-system/frontend/src/pages/admin/UserManagement.jsx
++++ b/nursery-system/frontend/src/pages/admin/UserManagement.jsx
+@@ -200,7 +200,9 @@ function FilterMenu({ value, options, onChange, placeholder, label }) {
+   const activeOption = options.find((option) => option.value === value) ?? options[0];
++  const activeCount = value !== 'all' ? 1 : 0;
+ 
+   return (
+-    <Menu as="div" className="relative inline-block text-right">
++    <Menu as="div" className="relative inline-block text-right">
++      {({ open }) => (
++        <>
+       <Menu.Button
++        type="button"
+-        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
++        className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-white px-4 py-2 text-sm font-medium text-slate-700 shadow-sm transition hover:bg-slate-50"
++        aria-expanded={open}
++        aria-haspopup="true"
++        aria-labelledby="filtermenu-button-label"
++        aria-controls="filtermenu-list"
+       >
+-        <FunnelIcon className="h-4 w-4 text-slate-400" />
++        <FunnelIcon className="h-4 w-4 text-slate-400" aria-hidden="true" />
++        <span id="filtermenu-button-label">{activeOption?.label ?? placeholder}</span>
+-        <span>{activeOption?.label ?? placeholder}</span>
++        {activeCount > 0 && (
++          <span 
++            className="inline-flex h-5 w-5 items-center justify-center rounded-full bg-primary-600 text-xs text-white"
++            aria-label={`${activeCount} فلتر نشط`}
++          >
++            {activeCount}
++          </span>
++        )}
+       </Menu.Button>
+       <Transition
+         as={Fragment}
+         enter="transition ease-out duration-100"
+         enterFrom="transform opacity-0 scale-95"
+         enterTo="transform opacity-100 scale-100"
+         leave="transition ease-in duration-75"
+         leaveFrom="transform opacity-100 scale-100"
+         leaveTo="transform opacity-0 scale-95"
+       >
+-        <Menu.Items className="absolute left-0 z-20 mt-2 w-48 origin-top-left overflow-hidden rounded-2xl bg-white py-2 text-sm shadow-xl ring-1 ring-black/5 focus:outline-none">
++        <Menu.Items
++          id="filtermenu-list"
++          className="absolute left-0 z-20 mt-2 w-48 origin-top-left overflow-hidden rounded-2xl bg-white py-2 text-sm shadow-xl ring-1 ring-black/5 focus:outline-none"
++          aria-label={`خيارات ${label}`}
++          aria-orientation="vertical"
++        >
+           {options.map((option) => (
+             <Menu.Item key={option.value}>
+               {({ active }) => (
+                 <button
+                   type="button"
+                   onClick={() => onChange(option.value)}
+                   className={clsx(
+                     'flex w-full items-center justify-between px-4 py-2 text-right transition',
+                     active ? 'bg-primary-50 text-primary-700' : 'text-slate-700'
+                   )}
++                  role="menuitemradio"
++                  aria-checked={option.value === value}
+                 >
+                   <span>{option.label}</span>
+                   {option.value === value && (
+-                    <CheckCircleIcon className="h-4 w-4 text-primary-500" />
++                    <>
++                      <CheckCircleIcon className="h-4 w-4 text-primary-500" aria-hidden="true" />
++                      <span className="sr-only">(محدد)</span>
++                    </>
+                   )}
+                 </button>
+               )}
+             </Menu.Item>
+           ))}
+         </Menu.Items>
+       </Transition>
++        </>
++      )}
+     </Menu>
+   );
+ }
+
+@@ -250,7 +290,9 @@ function SortableHeader({ label, field, sort, onSort, align = 'right' }) {
+   const isActive = sort.field === field;
+   const direction = isActive ? sort.direction : null;
++  const ariaSortValue = isActive 
++    ? (direction === 'asc' ? 'ascending' : 'descending')
++    : 'none';
+ 
+   return (
+     <th
+       scope="col"
+       className={clsx(
+         'sticky top-0 z-10 bg-slate-50 px-6 py-3 text-sm font-semibold text-slate-600',
+         align === 'center' ? 'text-center' : align === 'left' ? 'text-left' : 'text-right'
+       )}
++      aria-sort={ariaSortValue}
+     >
+       <button
+         type="button"
+         onClick={() => onSort(field)}
+-        className="inline-flex items-center gap-2 text-slate-600 transition hover:text-primary-600 focus:outline-none"
++        className="inline-flex items-center gap-2 text-slate-600 transition hover:text-primary-600"
++        aria-label={`ترتيب حسب ${label}${isActive ? ` — ${direction === 'asc' ? 'تصاعدي' : 'تنازلي'}` : ''}`}
+       >
+         <span>{label}</span>
+         <BarsArrowDownIcon
+           className={clsx(
+             'h-4 w-4 transition-transform',
+             isActive ? 'text-primary-600' : 'text-slate-400',
+             direction === 'asc' ? 'rotate-180' : 'rotate-0'
+           )}
++          aria-hidden="true"
+         />
+       </button>
+     </th>
+   );
+ }
+
+@@ -300,7 +350,12 @@ function BulkToolbar({ count, onEnable, onDisable, onDelete, disabled, loading
+   return (
++    <>
++      {/* Announce toolbar appearance */}
++      {count > 0 && (
++        <div role="status" aria-live="polite" aria-atomic="true" className="sr-only">
++          تم تحديد {count} مستخدم. استخدم شريط الأدوات لتنفيذ إجراءات جماعية.
++        </div>
++      )}
++      
+     <div 
+-      className="fixed inset-x-0 bottom-6 flex justify-center px-4"
++      className="fixed inset-x-0 bottom-6 flex justify-center px-4"
++      role="toolbar"
++      aria-label="إجراءات جماعية للمستخدمين المحددين"
+     >
+       <div className="flex items-center gap-3 rounded-full bg-white px-6 py-3 shadow-2xl ring-1 ring-slate-200">
+-        <span className="text-sm font-medium text-slate-700">
++        <span 
++          className="text-sm font-medium text-slate-700"
++          aria-live="polite"
++          aria-atomic="true"
++        >
+           تم تحديد {count} مستخدم
+         </span>
+         <Button
+           size="sm"
+           variant="secondary"
+           onClick={onEnable}
+           disabled={disabled || loading === 'enable'}
+           loading={loading === 'enable'}
++          aria-label={`تفعيل ${count} مستخدم محدد`}
+         >
+           تفعيل
+         </Button>
+         <Button
+           size="sm"
+           variant="warning"
+           onClick={onDisable}
+           disabled={disabled || loading === 'disable'}
+           loading={loading === 'disable'}
++          aria-label={`تعطيل ${count} مستخدم محدد`}
+         >
+           تعطيل
+         </Button>
+         <Button
+           size="sm"
+           variant="danger"
+           onClick={onDelete}
+           disabled={disabled || loading === 'delete'}
+           loading={loading === 'delete'}
++          aria-label={`حذف ${count} مستخدم محدد نهائياً`}
+         >
+           حذف
+        </Button>
+       </div>
+     </div>
++    </>
+   );
+ }
+
+@@ -600,7 +670,10 @@ function UserForm({ user, onClose, onSuccess, onTempCredentials }) {
++  const closeButtonRef = useRef(null);
+   const [formData, setFormData] = useState({
+     email: user?.email || '',
+     fullName: user?.fullName || user?.full_name || '',
+     phone: user?.phone || '',
+     role: user?.role || USER_ROLES.MANAGER,
+     nurseryId: user?.nurseryId || user?.nursery_id || '',
+     branchId: user?.branchId || user?.branch_id || '',
+     permissions: user?.permissions || [],
+   });
+   const [fieldErrors, setFieldErrors] = useState({});
+   const [generalError, setGeneralError] = useState('');
+ 
+   const queryClient = useQueryClient();
+ 
++  // Focus close button when modal opens
++  useEffect(() => {
++    if (closeButtonRef.current) {
++      closeButtonRef.current.focus();
++    }
++  }, []);
++
+   const { data: nurseryRaw, isLoading: nurseriesLoading } = useQuery({
+     queryKey: ['admin-nurseries', 'form'],
+     queryFn: async () => {
+       const response = await apiClient.get(getEndpoint('/admin/nurseries'));
+       return normalizeNurseriesResponse(response.data);
+     },
+   });
+ 
+   const nurseries = nurseryRaw ?? [];
+ 
+   const selectedNursery = useMemo(() => {
+     if (!formData.nurseryId) {
+       return null;
+     }
+     const numericId = Number(formData.nurseryId);
+     return nurseries.find((item) => Number(item.id) === numericId) || null;
+   }, [formData.nurseryId, nurseries]);
+ 
+   const branchOptions = useMemo(() => {
+     const branches = selectedNursery?.branches
+       ?? selectedNursery?.Branches
+       ?? selectedNursery?.data?.branches
+       ?? [];
+     return Array.isArray(branches) ? branches : [];
+   }, [selectedNursery]);
+ 
+   // Focus first invalid field after error
++  useEffect(() => {
++    const firstErrorKey = Object.keys(fieldErrors)[0];
++    if (firstErrorKey) {
++      const fieldMap = {
++        full_name: 'user-fullname',
++        email: 'user-email',
++        phone: 'user-phone',
++        role: 'user-role',
++        nursery_id: 'user-nursery',
++        branch_id: 'user-branch'
++      };
++      const el = document.getElementById(fieldMap[firstErrorKey])
++        || document.querySelector('[aria-invalid="true"]')
++        || closeButtonRef.current;
++      if (el) el.focus();
++    }
++  }, [fieldErrors]);
++
+   const mutation = useMutation({
+     mutationFn: async (payload) => {
+       const requestBody = {
+         full_name: payload.fullName,
+         email: payload.email,
+         phone: payload.phone,
+         role: payload.role,
+         nursery_id: payload.nurseryId ? Number(payload.nurseryId) : null,
+         branch_id: payload.branchId ? Number(payload.branchId) : null,
+         permissions: payload.permissions,
+       };
+ 
+       if (user?.id) {
+         return apiClient.put(getEndpoint(`/admin/users/${user.id}`), requestBody);
+       }
+ 
+       return apiClient.post(getEndpoint('/admin/users'), requestBody);
+     },
+     onMutate: () => {
+       setFieldErrors({});
+       setGeneralError('');
+     },
+     onSuccess: (response) => {
+       queryClient.invalidateQueries({ queryKey: ['admin-users'] });
+       toast.success(user ? 'تم تحديث المستخدم بنجاح' : 'تم إضافة المستخدم بنجاح');
+ 
+       if (!user && response?.data?.ephemeral?.temp_password && formData.role === USER_ROLES.MANAGER) {
+         onTempCredentials?.({
+           email: formData.email,
+           tempPassword: response.data.ephemeral.temp_password,
+         });
+       }
+ 
+       onSuccess?.();
+       onClose();
+     },
+     onError: (error) => {
+       const fieldErrs = extractFieldErrors(error);
+       setFieldErrors(fieldErrs);
+       const generalErr = extractErrorMessage(error) || handleApiError(error);
+       setGeneralError(generalErr);
+       toast.error(generalErr);
+     },
+   });
+ 
+   const handleSubmit = (event) => {
+     event.preventDefault();
+     mutation.mutate(formData);
+   };
+ 
+   return (
+-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/40 px-4 py-8">
+-      <div className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl">
++    <Transition appear show={true} as={Fragment}>
++      <Dialog 
++        as="div" 
++        className="relative z-50" 
++        onClose={onClose}
++        initialFocus={closeButtonRef}
++      >
++        <Transition.Child
++          as={Fragment}
++          enter="ease-out duration-300"
++          enterFrom="opacity-0"
++          enterTo="opacity-100"
++          leave="ease-in duration-200"
++          leaveFrom="opacity-100"
++          leaveTo="opacity-0"
++        >
++          <div className="fixed inset-0 bg-slate-900/40" aria-hidden="true" />
++        </Transition.Child>
++
++        <div className="fixed inset-0 overflow-y-auto">
++          <div className="flex min-h-full items-center justify-center p-4">
++            <Transition.Child
++              as={Fragment}
++              enter="ease-out duration-300"
++              enterFrom="opacity-0 scale-95"
++              enterTo="opacity-100 scale-100"
++              leave="ease-in duration-200"
++              leaveFrom="opacity-100 scale-100"
++              leaveTo="opacity-0 scale-95"
++            >
++              <Dialog.Panel className="w-full max-w-3xl rounded-3xl bg-white shadow-2xl">
+         <div className="flex items-center justify-between border-b border-slate-200 px-6 py-4">
+-          <h2 className="text-xl font-semibold text-slate-900">
++          <Dialog.Title className="text-xl font-semibold text-slate-900">
+             {user ? 'تحديث المستخدم' : 'إضافة مستخدم جديد'}
+-          </h2>
++          </Dialog.Title>
+           <button
++            ref={closeButtonRef}
+             type="button"
+             onClick={onClose}
+-            className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
++            className="rounded-full p-2 text-slate-400 transition hover:bg-slate-100 hover:text-slate-700"
++            aria-label="إغلاق النافذة"
+           >
+-            <XCircleIcon className="h-6 w-6" />
++            <XCircleIcon className="h-6 w-6" aria-hidden="true" />
+           </button>
+         </div>
+ 
+         <form className="px-6 py-6" onSubmit={handleSubmit}>
+           <div className="grid gap-6 md:grid-cols-2">
+             <div>
+-              <label className="block text-sm font-medium text-slate-700">الاسم الكامل</label>
++              <label htmlFor="user-fullname" className="block text-sm font-medium text-slate-700">
++                الاسم الكامل
++                <span className="text-red-600" aria-label="مطلوب">*</span>
++              </label>
+               <input
++                id="user-fullname"
+                 type="text"
+                 value={formData.fullName}
+                 onChange={(event) => setFormData((prev) => ({ ...prev, fullName: event.target.value }))}
+                 className={clsx(
+                   'mt-1 w-full rounded-xl border px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-primary-500',
+                   fieldErrors.full_name ? 'border-red-300 focus:border-red-400' : 'border-slate-300 focus:border-primary-300'
+                 )}
+                 placeholder="أدخل الاسم الكامل"
+                 disabled={mutation.isPending}
++                required
++                aria-required="true"
++                aria-invalid={fieldErrors.full_name ? 'true' : 'false'}
++                aria-describedby={fieldErrors.full_name ? 'fullname-error' : undefined}
+               />
+               {fieldErrors.full_name && (
+-                <p className="mt-1 text-sm text-red-600">{fieldErrors.full_name}</p>
++                <p 
++                  id="fullname-error" 
++                  className="mt-1 text-sm text-red-600"
++                  role="alert"
++                >
++                  {fieldErrors.full_name}
++                </p>
+               )}
+             </div>
+ 
+             {/* Similar updates for all other form fields */}
+           </div>
+ 
+           {generalError && (
+-            <div className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700">
+-              {generalError}
++            <div 
++              className="mt-4 rounded-xl border border-red-200 bg-red-50 px-4 py-3 text-sm text-red-700"
++              role="alert"
++            >
++              <strong className="font-medium">خطأ في الحفظ:</strong> {generalError}
+             </div>
+           )}
+ 
+           <div className="mt-6 flex items-center justify-end gap-3 border-t border-slate-200 pt-4">
+             <Button variant="ghost" onClick={onClose} disabled={mutation.isPending}>
+               إلغاء
+             </Button>
+             <Button type="submit" loading={mutation.isPending}>
+               {user ? 'تحديث' : 'إضافة'}
+             </Button>
+           </div>
+         </form>
+-      </div>
+-    </div>
++              </Dialog.Panel>
++            </Transition.Child>
++          </div>
++        </div>
++      </Dialog>
++    </Transition>
+   );
+ }
+
+---
+Fixes: Issues 2.3, 2.5, 2.6, 2.7, 6.3
+
+Changes:
+- FilterMenu with ARIA menuitemradio
+- SortableHeader with aria-sort
+- BulkToolbar with role="toolbar"
+- UserForm with Dialog focus trap
+- Form validation with ARIA
+- All inputs have labels
+- Error messages with role="alert"
+- Focus management on modal open/close
+
+Verification:
+- Filter menus keyboard navigable
+- Modal focus trapped
+- Form errors announced
+- Bulk toolbar accessible

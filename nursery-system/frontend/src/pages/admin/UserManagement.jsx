@@ -26,7 +26,7 @@ import Badge from '../../components/ui/Badge';
 import ConfirmDialog from '../../components/ui/ConfirmDialog';
 import EmptyState from '../../components/ui/EmptyState';
 import LoadingSpinner from '../../components/ui/LoadingSpinner';
-import { apiClient, handleApiError, extractErrorMessage, extractFieldErrors } from '../../lib/apiClient';
+import { apiClient, handleApiError, extractErrorMessage, extractFieldErrors, getEndpoint } from '../../lib/apiClient';
 import { USER_ROLES } from '../../lib/constants';
 import { useAuth } from '../../contexts/AuthContext';
 
@@ -438,7 +438,7 @@ function UserForm({ user, onClose, onSuccess, onTempCredentials }) {
   const { data: nurseryRaw, isLoading: nurseriesLoading } = useQuery({
     queryKey: ['admin-nurseries', 'form'],
     queryFn: async () => {
-      const response = await apiClient.get('/admin/nurseries');
+      const response = await apiClient.get(getEndpoint('/admin/nurseries'));
       return normalizeNurseriesResponse(response.data);
     },
   });
@@ -474,10 +474,10 @@ function UserForm({ user, onClose, onSuccess, onTempCredentials }) {
       };
 
       if (user?.id) {
-        return apiClient.put(`/admin/users/${user.id}`, requestBody);
+        return apiClient.put(getEndpoint(`/admin/users/${user.id}`), requestBody);
       }
 
-      return apiClient.post('/admin/users', requestBody);
+      return apiClient.post(getEndpoint('/admin/users'), requestBody);
     },
     onMutate: () => {
       setFieldErrors({});
@@ -773,7 +773,7 @@ export default function UserManagement() {
         params.query = debouncedSearch.trim();
       }
 
-      const response = await apiClient.get('/admin/users', { params });
+      const response = await apiClient.get(getEndpoint('/admin/users'), { params });
       return normalizeUsersResponse(response.data, pageState, pageSizeState);
     },
   });
@@ -781,7 +781,7 @@ export default function UserManagement() {
   const { data: nurseriesRaw } = useQuery({
     queryKey: ['admin-nurseries', 'list'],
     queryFn: async () => {
-      const response = await apiClient.get('/admin/nurseries');
+      const response = await apiClient.get(getEndpoint('/admin/nurseries'));
       return normalizeNurseriesResponse(response.data);
     },
   });
@@ -954,7 +954,7 @@ export default function UserManagement() {
         params.search = debouncedSearch.trim();
       }
 
-      const response = await apiClient.get('/admin/users', { params });
+      const response = await apiClient.get(getEndpoint('/admin/users'), { params });
       const { items } = normalizeUsersResponse(response.data, 1, 1000);
 
       if (!items.length) {
@@ -1015,11 +1015,11 @@ export default function UserManagement() {
     setBulkLoading(kind);
     try {
       if (kind === 'delete') {
-        await Promise.all(actionableUsers.map((user) => apiClient.delete(`/admin/users/${user.id}`)));
+        await Promise.all(actionableUsers.map((user) => apiClient.delete(getEndpoint(`/admin/users/${user.id}`))));
         toast.success('تم حذف جميع الحسابات المحددة');
       } else {
         const active = kind === 'enable';
-        await Promise.all(actionableUsers.map((user) => apiClient.patch(`/admin/users/${user.id}/activation`, { active })));
+        await Promise.all(actionableUsers.map((user) => apiClient.patch(getEndpoint(`/admin/users/${user.id}/activation`), { active })));
         toast.success(active ? 'تم تفعيل جميع الحسابات المحددة' : 'تم تعطيل جميع الحسابات المحددة');
       }
       setSelectedIds(new Set());
@@ -1033,7 +1033,7 @@ export default function UserManagement() {
   }, [currentUserId, queryClient, selectedIds, users]);
   const toggleStatusMutation = useMutation({
     mutationFn: async ({ userId, active }) => {
-      const response = await apiClient.patch(`/admin/users/${userId}/activation`, { active });
+      const response = await apiClient.patch(getEndpoint(`/admin/users/${userId}/activation`), { active });
       return response.data;
     },
     onMutate: async ({ userId, active }) => {
@@ -1070,7 +1070,7 @@ export default function UserManagement() {
 
   const deleteMutation = useMutation({
     mutationFn: async ({ userId }) => {
-      const response = await apiClient.delete(`/admin/users/${userId}`);
+      const response = await apiClient.delete(getEndpoint(`/admin/users/${userId}`));
       return response.data;
     },
     onMutate: async ({ userId }) => {
@@ -1144,10 +1144,11 @@ export default function UserManagement() {
   const isBulkDisableOpen = confirmAction?.type === 'bulk-disable';
   const isBulkDeleteOpen = confirmAction?.type === 'bulk-delete';
   return (
-    <div className="space-y-6">
-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-slate-900">إدارة المستخدمين والصلاحيات</h1>
+    <main aria-labelledby="user-management-title">
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 id="user-management-title" className="text-2xl font-bold text-slate-900">إدارة المستخدمين والصلاحيات</h1>
           <p className="mt-1 text-sm text-slate-600">تحكم بحسابات الفريق وتابع نشاطهم من مكان واحد.</p>
         </div>
         <div className="flex flex-wrap items-center gap-3">
@@ -1245,7 +1246,7 @@ export default function UserManagement() {
                   <SortableHeader label="آخر دخول" field="lastLogin" sort={sort} onSort={handleSort} />
                   <SortableHeader label="تاريخ الإنشاء" field="createdAt" sort={sort} onSort={handleSort} />
                   <th scope="col" className="sticky top-0 z-10 bg-slate-50 px-6 py-3 text-center text-sm font-semibold text-slate-600">
-                    كلمة المرور
+                    حالة كلمة المرور
                   </th>
                   <th scope="col" className="sticky top-0 z-10 px-6 py-3 text-center text-sm font-semibold text-slate-600">
                     الإجراءات
@@ -1314,37 +1315,12 @@ export default function UserManagement() {
                         {formatDateTime(createdAtLabel, { fallback: 'غير متوفر', withTime: false })}
                       </td>
                       <td className="px-6 py-4 text-center align-middle">
-                        {user.tempPassword ? (
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="font-mono text-xs text-slate-700">
-                              {visiblePasswords.has(userId) ? user.tempPassword : '••••••••'}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setVisiblePasswords((prev) => {
-                                  const next = new Set(prev);
-                                  if (next.has(userId)) {
-                                    next.delete(userId);
-                                  } else {
-                                    next.add(userId);
-                                  }
-                                  return next;
-                                });
-                              }}
-                              className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-primary-600"
-                              title={visiblePasswords.has(userId) ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
-                            >
-                              {visiblePasswords.has(userId) ? (
-                                <EyeSlashIcon className="h-4 w-4" />
-                              ) : (
-                                <EyeIcon className="h-4 w-4" />
-                              )}
-                            </button>
-                          </div>
-                        ) : (
-                          <span className="text-xs text-slate-400">غير متوفر</span>
-                        )}
+                        <Badge 
+                          variant={(user.must_reset_password || user.mustResetPassword) ? "warning" : "success"} 
+                          size="sm"
+                        >
+                          {(user.must_reset_password || user.mustResetPassword) ? "يتطلب إعادة تعيين" : "تم التعيين"}
+                        </Badge>
                       </td>
                       <td className="px-6 py-4 text-center align-middle">
                         <UserRowActions
@@ -1534,6 +1510,7 @@ export default function UserManagement() {
         loading={bulkLoading === 'delete'}
         variant="danger"
       />
-    </div>
+      </div>
+    </main>
   );
 }

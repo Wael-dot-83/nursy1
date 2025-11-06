@@ -109,6 +109,49 @@ def log_settings_change(db: Session, user: User, setting_key: str,
                     {**(details or {}), "setting_key": setting_key}, request)
 
 
+def log_security_event(
+    db: Session,
+    action: str,
+    details: Optional[Dict] = None,
+    ip_address: Optional[str] = None,
+    user_agent: Optional[str] = None,
+    *,
+    user: Optional[User] = None,
+    request: Optional[Request] = None,
+):
+    """Log a security-related event. Supports optional user context."""
+    try:
+        if user:
+            return log_audit(
+                db=db,
+                user=user,
+                action=action,
+                resource_type="security",
+                resource_id=user.id,
+                details={**(details or {}), "ip_address": ip_address, "user_agent": user_agent},
+                request=request,
+            )
+
+        audit_log = AuditLog(
+            user_id=None,
+            action=action,
+            resource_type="security",
+            resource_id=None,
+            details=details or {},
+            ip_address=ip_address,
+            user_agent=user_agent,
+            created_at=datetime.utcnow(),
+        )
+
+        db.add(audit_log)
+        db.flush()
+        return audit_log
+
+    except Exception:
+        logger.exception("Failed to create security audit log")
+        return None
+
+
 # Example usage in a router:
 """
 from fastapi import APIRouter, Depends, Request

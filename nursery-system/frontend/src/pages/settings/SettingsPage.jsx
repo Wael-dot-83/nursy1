@@ -11,13 +11,13 @@ export default function SettingsPage() {
   const preferencesQuery = useQuery({
     queryKey: ['notification-preferences'],
     queryFn: async () => {
-      const response = await apiClient.get('/notifications/preferences');
+      const response = await apiClient.get('/api/notifications/preferences');
       return response.data;
     },
   });
 
   const updatePreferencesMutation = useMutation({
-    mutationFn: (payload) => apiClient.put('/notifications/preferences', payload),
+    mutationFn: (payload) => apiClient.put('/api/notifications/preferences', payload),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notification-preferences'] });
       setDeviceToken('');

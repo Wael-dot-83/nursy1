@@ -14,60 +14,46 @@ export default defineConfig({
     host: '0.0.0.0',
     port: 5174,
     proxy: {
-      '/admin': {
+      '/api': {
         target: 'http://localhost:8002',
         changeOrigin: true,
         secure: false,
-      },
-      '/auth': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/users': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/children': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/attendance': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/reports': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/files': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/notifications': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/audit-logs': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
-      },
-      '/system': {
-        target: 'http://localhost:8002',
-        changeOrigin: true,
-        secure: false,
+        rewrite: (path) => {
+          const newPath = path.replace(/^\/api/, '');
+          if (process.env.NODE_ENV === 'development') {
+            console.log(`[Proxy] ${path} -> ${newPath}`);
+          }
+          return newPath;
+        },
+        configure: (proxy, _options) => {
+          proxy.on('error', (err, _req, _res) => {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[Proxy] Error:', err);
+            }
+          });
+          proxy.on('proxyReq', (proxyReq, req, _res) => {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[Proxy] Sending Request to:', req.url);
+            }
+          });
+          proxy.on('proxyRes', (proxyRes, req, _res) => {
+            if (process.env.NODE_ENV === 'development') {
+              console.log('[Proxy] Received Response from:', req.url, 'Status:', proxyRes.statusCode);
+            }
+          });
+        },
       },
     },
   },
   build: {
     outDir: 'dist',
+    charset: 'utf8',  // ← جديد: تحديد صريح لترميز UTF-8
+    minify: 'esbuild',
+    rollupOptions: {
+      output: {
+        charset: 'utf8',  // ← جديد: UTF-8 للملفات الناتجة
+      },
+    },
   },
   test: {
     globals: true,

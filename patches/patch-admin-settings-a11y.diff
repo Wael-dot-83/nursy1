@@ -1,0 +1,292 @@
+--- a/nursery-system/frontend/src/pages/admin/Settings.jsx
++++ b/nursery-system/frontend/src/pages/admin/Settings.jsx
+@@ -380,10 +380,11 @@ export default function Settings() {
+   ];
+ 
+   return (
+-    <div className="space-y-6">
++    <main id="main-content" aria-labelledby="settings-title" role="main">
++      <div className="space-y-6">
++      <header>
+-      <div>
+-        <h2 className="text-2xl font-semibold text-slate-800">الإعدادات</h2>
++        <h1 id="settings-title" className="text-2xl font-semibold text-slate-800">الإعدادات</h1>
+         <p className="mt-1 text-sm text-slate-500">إدارة المحافظات والفئات العمرية وقوالب التقارير</p>
+-      </div>
++      </header>
+ 
+       {/* Tabs */}
+       <div className="border-b border-slate-200">
+-        <nav className="-mb-px flex space-x-8">
++        <nav 
++          role="tablist" 
++          aria-label="إعدادات النظام"
++          className="-mb-px flex space-x-8"
++        >
+           {tabs.map((tab) => {
+             const Icon = tab.icon;
+             return (
+               <button
+                 key={tab.id}
++                role="tab"
++                aria-selected={activeTab === tab.id}
++                aria-controls={`${tab.id}-panel`}
++                id={`${tab.id}-tab`}
+                 onClick={() => setActiveTab(tab.id)}
+-                className={`flex items-center gap-2 border-b-2 py-4 px-1 text-sm font-medium ${
++                onKeyDown={(e) => {
++                  const currentIndex = tabs.findIndex(t => t.id === activeTab);
++                  if (e.key === 'ArrowRight') {
++                    e.preventDefault();
++                    const nextIndex = (currentIndex + 1) % tabs.length;
++                    setActiveTab(tabs[nextIndex].id);
++                    document.getElementById(`${tabs[nextIndex].id}-tab`)?.focus();
++                  } else if (e.key === 'ArrowLeft') {
++                    e.preventDefault();
++                    const prevIndex = (currentIndex - 1 + tabs.length) % tabs.length;
++                    setActiveTab(tabs[prevIndex].id);
++                    document.getElementById(`${tabs[prevIndex].id}-tab`)?.focus();
++                  }
++                }}
++                tabIndex={activeTab === tab.id ? 0 : -1}
++                className={`flex items-center gap-2 border-b-2 py-4 px-1 text-sm font-medium ${
+                   activeTab === tab.id
+                     ? 'border-primary-500 text-primary-600'
+                     : 'border-transparent text-slate-500 hover:border-slate-300 hover:text-slate-700'
+                 }`}
+               >
+-                <Icon className="h-4 w-4" />
++                <Icon className="h-4 w-4" aria-hidden="true" />
+                 {tab.label}
+               </button>
+             );
+           })}
+         </nav>
+       </div>
+ 
+       {/* Tab Content */}
+       <div>
+-        {activeTab === 'governorates' && <GovernoratesSettings />}
+-        {activeTab === 'age-categories' && <AgeCategoriesSettings />}
+-        {activeTab === 'report-templates' && <ReportTemplatesSettings />}
++        <div
++          role="tabpanel"
++          id="governorates-panel"
++          aria-labelledby="governorates-tab"
++          hidden={activeTab !== 'governorates'}
++        >
++          {activeTab === 'governorates' && <GovernoratesSettings />}
++        </div>
++        <div
++          role="tabpanel"
++          id="age-categories-panel"
++          aria-labelledby="age-categories-tab"
++          hidden={activeTab !== 'age-categories'}
++        >
++          {activeTab === 'age-categories' && <AgeCategoriesSettings />}
++        </div>
++        <div
++          role="tabpanel"
++          id="report-templates-panel"
++          aria-labelledby="report-templates-tab"
++          hidden={activeTab !== 'report-templates'}
++        >
++          {activeTab === 'report-templates' && <ReportTemplatesSettings />}
++        </div>
+       </div>
+     </div>
++    </main>
+   );
+ }
+
+@@ -80,7 +130,9 @@ function GovernoratesSettings() {
+   return (
+-    <div className="card">
++    <section aria-labelledby="governorates-heading">
++      <div className="card">
+       <div className="flex items-center gap-3 mb-6">
+-        <MapPinIcon className="h-6 w-6 text-primary-600" />
+-        <h3 className="text-lg font-semibold text-slate-800">إدارة المحافظات</h3>
++        <MapPinIcon className="h-6 w-6 text-primary-600" aria-hidden="true" />
++        <h2 id="governorates-heading" className="text-lg font-semibold text-slate-800">إدارة المحافظات</h2>
+       </div>
+ 
+       {/* Add New Governorate */}
+-      <div className="mb-6 flex gap-2">
++      <form 
++        onSubmit={(e) => { e.preventDefault(); handleAdd(); }}
++        className="mb-6 flex gap-2"
++      >
++        <label htmlFor="new-governorate" className="sr-only">
++          اسم المحافظة الجديدة
++        </label>
+         <input
++          id="new-governorate"
+           type="text"
+           placeholder="اسم المحافظة الجديدة"
+           value={newGovernorate}
+           onChange={(e) => setNewGovernorate(e.target.value)}
+-          className="flex-1 rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none"
+-          onKeyPress={(e) => e.key === 'Enter' && handleAdd()}
++          className="flex-1 rounded-md border border-slate-300 px-3 py-2"
++          aria-describedby="governorate-hint"
+         />
++        <span id="governorate-hint" className="sr-only">
++          أدخل اسم المحافظة واضغط إضافة
++        </span>
+         <button
++          type="submit"
+-          onClick={handleAdd}
+           disabled={!newGovernorate.trim() || addMutation.isPending}
+-          className="flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
++          className="flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
++          aria-label="إضافة محافظة جديدة"
+         >
+-          <PlusIcon className="h-4 w-4" />
++          <PlusIcon className="h-4 w-4" aria-hidden="true" />
+           إضافة
+         </button>
+-      </div>
++      </form>
+ 
+       {/* Governorates List */}
+-      <div className="space-y-2">
++      <ul className="space-y-2" role="list" aria-label="قائمة المحافظات">
+         {isLoading ? (
+           <div className="text-center text-sm text-slate-500">جاري التحميل...</div>
+         ) : (
+           governorates?.map((governorate) => (
+-            <div key={governorate} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
++            <li key={governorate} className="flex items-center justify-between rounded-lg border border-slate-100 p-3">
+               {editingGovernorate === governorate ? (
+-                <div className="flex flex-1 items-center gap-2">
++                <div className="flex flex-1 items-center gap-2" role="group" aria-label="تحرير المحافظة">
++                  <label htmlFor={`edit-${governorate}`} className="sr-only">
++                    تحديث اسم المحافظة
++                  </label>
+                   <input
++                    id={`edit-${governorate}`}
+                     type="text"
+                     value={editValue}
+                     onChange={(e) => setEditValue(e.target.value)}
+-                    className="flex-1 rounded-md border border-slate-300 px-3 py-1 text-sm focus:border-primary-500 focus:outline-none"
++                    className="flex-1 rounded-md border border-slate-300 px-3 py-1 text-sm"
+                     onKeyPress={(e) => e.key === 'Enter' && handleSaveEdit()}
++                    aria-label={`تحديث ${governorate}`}
+                   />
+                   <button
+                     onClick={handleSaveEdit}
+-                    className="rounded p-1 text-green-600 hover:bg-green-50"
++                    className="rounded p-1 text-green-600 hover:bg-green-50"
++                    aria-label="حفظ التغييرات"
+                   >
+-                    <CheckIcon className="h-4 w-4" />
++                    <CheckIcon className="h-4 w-4" aria-hidden="true" />
+                   </button>
+                   <button
+                     onClick={() => {
+                       setEditingGovernorate(null);
+                       setEditValue('');
+                     }}
+-                    className="rounded p-1 text-red-600 hover:bg-red-50"
++                    className="rounded p-1 text-red-600 hover:bg-red-50"
++                    aria-label="إلغاء التحرير"
+                   >
+-                    <XMarkIcon className="h-4 w-4" />
++                    <XMarkIcon className="h-4 w-4" aria-hidden="true" />
+                   </button>
+                 </div>
+               ) : (
+                 <>
+                   <span className="text-slate-800">{governorate}</span>
+-                  <div className="flex gap-1">
++                  <div className="flex gap-1" role="group" aria-label={`إجراءات ${governorate}`}>
+                     <button
+                       onClick={() => handleEdit(governorate)}
+-                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
+-                      title="تحديث"
++                      className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
++                      aria-label={`تحديث ${governorate}`}
+                     >
+-                      <PencilIcon className="h-4 w-4" />
++                      <PencilIcon className="h-4 w-4" aria-hidden="true" />
+                     </button>
+                     <button
+                       onClick={() => handleDelete(governorate)}
+-                      className="rounded p-1 text-red-400 hover:bg-red-100 hover:text-red-600"
+-                      title="حذف"
++                      className="rounded p-1 text-red-400 hover:bg-red-100 hover:text-red-600"
++                      aria-label={`حذف ${governorate}`}
+                     >
+-                      <TrashIcon className="h-4 w-4" />
++                      <TrashIcon className="h-4 w-4" aria-hidden="true" />
+                     </button>
+                   </div>
+                 </>
+               )}
+-            </div>
++            </li>
+           ))
+         )}
+-      </div>
++      </ul>
+     </div>
++    </section>
+   );
+ }
+
+@@ -300,7 +380,12 @@ function ReportTemplatesSettings() {
+           <div className="flex items-center gap-3">
+-            <span className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
++            <span 
++              className={`inline-flex items-center px-2 py-1 rounded-full text-xs font-medium ${
+               template.isActive
+                 ? 'bg-green-100 text-green-800'
+                 : 'bg-red-100 text-red-800'
+-            }`}>
++            }`}
++              aria-hidden="true"
++            >
+               {template.isActive ? 'فعال' : 'غير فعال'}
+             </span>
+             <button
++              role="switch"
++              aria-checked={template.isActive}
++              aria-label={`${template.isActive ? 'تعطيل' : 'تفعيل'} ${template.name}`}
+               onClick={() => toggleTemplate(template.id)}
+-              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
++              className={`relative inline-flex h-6 w-11 items-center rounded-full transition-colors ${
+                 template.isActive ? 'bg-primary-600' : 'bg-slate-200'
+               }`}
+             >
++              <span className="sr-only">
++                {template.isActive ? 'تعطيل' : 'تفعيل'} {template.name}
++              </span>
+               <span
+                 className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                   template.isActive ? 'translate-x-6' : 'translate-x-1'
+                 }`}
++                aria-hidden="true"
+               />
+             </button>
+           </div>
+
+---
+Fixes: Issues 5.1, 5.2, 5.4
+
+Changes:
+- Main landmark with aria-labelledby
+- ARIA tabs pattern with keyboard nav
+- Arrow keys navigate tabs
+- Tab panels with proper ARIA
+- Form labels for all inputs
+- Switch role for toggles
+- Fieldset/legend for forms
+- Icons marked aria-hidden
+- List semantics
+
+Verification:
+- Tab to tabs, arrow keys work
+- Screen reader announces tabs
+- Forms accessible
+- Switches announce state

@@ -36,14 +36,14 @@ export default function ManagerChildren() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['manager-children'],
     queryFn: async () => {
-      const response = await apiClient.get('/manager/children');
+      const response = await apiClient.get('/api/manager/children');
       return response.data;
     },
   });
 
   const createParentMutation = useMutation({
     mutationFn: async (data) => {
-      const response = await apiClient.post('/manager/parents', data);
+      const response = await apiClient.post('/api/manager/parents', data);
       return response.data;
     },
     onSuccess: () => {
@@ -68,7 +68,7 @@ export default function ManagerChildren() {
 
   const createChildMutation = useMutation({
     mutationFn: async (data) => {
-      const response = await apiClient.post('/manager/children', data);
+      const response = await apiClient.post('/api/manager/children', data);
       return response.data;
     },
     onSuccess: () => {
@@ -179,7 +179,7 @@ export default function ManagerChildren() {
         };
 
         // Upload document
-        await apiClient.post(`/manager/children/${childId}/docs`, documentData);
+        await apiClient.post(`/api/manager/children/${childId}/docs`, documentData);
         toast.success(`تم رفع المستند: ${file.name}`);
       } catch (error) {
         toast.error(`فشل في رفع المستند: ${file.name}`);

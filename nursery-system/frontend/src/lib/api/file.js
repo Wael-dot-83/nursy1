@@ -1,4 +1,4 @@
-import { apiClient } from '../apiClient';
+import { apiClient, getEndpoint } from '../apiClient';
 
 // File Upload API
 export const uploadFile = (file, metadata) => {
@@ -9,12 +9,12 @@ export const uploadFile = (file, metadata) => {
       formData.append(key, metadata[key]);
     });
   }
-  return apiClient.post('/files/upload', formData, {
+  return apiClient.post(getEndpoint('/files/upload'), formData, {
     headers: { 'Content-Type': 'multipart/form-data' },
   });
 };
 
-export const getFiles = (params) => apiClient.get('/files', { params });
-export const getFile = (id) => apiClient.get(`/files/${id}`);
-export const deleteFile = (id) => apiClient.delete(`/files/${id}`);
-export const downloadFile = (id) => apiClient.get(`/files/${id}/download`, { responseType: 'blob' });
+export const getFiles = (params) => apiClient.get(getEndpoint('/files'), { params });
+export const getFile = (id) => apiClient.get(getEndpoint(`/files/${id}`));
+export const deleteFile = (id) => apiClient.delete(getEndpoint(`/files/${id}`));
+export const downloadFile = (id) => apiClient.get(getEndpoint(`/files/${id}/download`), { responseType: 'blob' });

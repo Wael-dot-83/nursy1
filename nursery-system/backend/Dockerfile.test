@@ -1,0 +1,88 @@
+# ============================================
+# Backend Test Container
+# ============================================
+# Multi-stage Dockerfile optimized for running tests
+# Includes pytest, coverage, and test database fixtures
+
+# Stage 1: Builder
+FROM python:3.11-slim as builder
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y \
+    gcc \
+    libpq-dev \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Install Python dependencies
+WORKDIR /app
+COPY requirements.txt .
+RUN pip install --user --no-cache-dir -r requirements.txt
+
+# Install test dependencies
+RUN pip install --user --no-cache-dir \
+    pytest==7.4.3 \
+    pytest-asyncio==0.21.1 \
+    pytest-cov==4.1.0 \
+    pytest-mock==3.12.0 \
+    httpx==0.25.2 \
+    faker==20.1.0
+
+# Stage 2: Test Runner
+FROM python:3.11-slim
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y \
+    libpq5 \
+    curl \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user
+RUN useradd -m -u 1000 -s /bin/bash nursery
+
+# Copy installed packages from builder
+COPY --from=builder --chown=nursery:nursery /root/.local /home/nursery/.local
+
+# Set environment
+ENV PATH="/home/nursery/.local/bin:$PATH" \
+    PYTHONPATH=/app \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    PYTHONIOENCODING=utf-8 \
+    LC_ALL=C.UTF-8 \
+    LANG=C.UTF-8 \
+    # Test-specific environment
+    TESTING=true \
+    DB_HOST=db \
+    DB_PORT=5432 \
+    DB_NAME=nursery_test_db \
+    DB_USER=nursery_user \
+    DB_PASSWORD=nursery_password123
+
+# Set working directory
+WORKDIR /app
+
+# Copy application code
+COPY --chown=nursery:nursery . .
+
+# Copy test entrypoint script
+COPY --chown=nursery:nursery docker-test-entrypoint.sh /usr/local/bin/
+RUN chmod +x /usr/local/bin/docker-test-entrypoint.sh
+
+# Switch to non-root user
+USER nursery
+
+# Healthcheck
+HEALTHCHECK --interval=30s --timeout=5s --retries=3 \
+  CMD curl -f http://localhost:8000/health || exit 1
+
+# Default command: Run tests with coverage
+CMD ["pytest", "-v", "--cov=app", "--cov-report=term-missing", "--cov-report=html:/app/htmlcov"]
+
+# Alternative commands for different test scenarios:
+# Unit tests only: pytest tests/unit/
+# Integration tests: pytest tests/integration/
+# Specific test: pytest tests/test_nursery_creation.py
+# With coverage: pytest --cov=app --cov-report=term-missing
+# Parallel: pytest -n auto (requires pytest-xdist)

@@ -5,7 +5,7 @@ export default function ParentReports() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['parent-reports'],
     queryFn: async () => {
-      const response = await apiClient.get('/parent/reports');
+      const response = await apiClient.get('/api/parent/reports');
       return response.data;
     },
   });

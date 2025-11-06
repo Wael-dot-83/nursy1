@@ -5,7 +5,7 @@ export default function SupervisorDashboard() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['supervisor-children'],
     queryFn: async () => {
-      const response = await apiClient.get('/supervisor/children');
+      const response = await apiClient.get('/api/supervisor/children');
       return response.data;
     },
   });

@@ -1,0 +1,83 @@
+name: Full System Tests
+
+on:
+  push:
+    branches: [ main ]
+  pull_request:
+    branches: [ main ]
+  schedule:
+    - cron: '0 0 * * 0'  # Weekly on Sundays
+
+jobs:
+  integration-test:
+    runs-on: ubuntu-latest
+
+    services:
+      backend:
+        image: python:3.10
+        options: >-
+          --health-cmd "python -c 'import sys; sys.exit(0)'"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.10'
+
+    - name: Set up Node.js
+      uses: actions/setup-node@v3
+      with:
+        node-version: '18.x'
+
+    - name: Install backend dependencies
+      working-directory: ./nursery-system/backend
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+
+    - name: Initialize database
+      working-directory: ./nursery-system/backend
+      env:
+        SECRET_KEY: test-secret-key-very-long-for-testing-purposes
+        JWT_ACCESS_SECRET: test-jwt-access-secret-very-long-key
+        JWT_REFRESH_SECRET: test-jwt-refresh-secret-very-long-key
+        DATABASE_URL: sqlite:///./test_integration.db
+      run: |
+        python seed_db.py
+
+    - name: Start backend server
+      working-directory: ./nursery-system/backend
+      env:
+        SECRET_KEY: test-secret-key-very-long-for-testing-purposes
+        JWT_ACCESS_SECRET: test-jwt-access-secret-very-long-key
+        JWT_REFRESH_SECRET: test-jwt-refresh-secret-very-long-key
+        DATABASE_URL: sqlite:///./test_integration.db
+      run: |
+        python run.py &
+        sleep 5
+
+    - name: Install frontend dependencies
+      working-directory: ./nursery-system/frontend
+      run: npm ci
+
+    - name: Run E2E tests
+      working-directory: ./nursery-system/frontend
+      run: npm run test:run
+
+    - name: Build frontend
+      working-directory: ./nursery-system/frontend
+      env:
+        VITE_API_URL: http://localhost:8002
+      run: npm run build
+
+    - name: Upload build artifacts
+      uses: actions/upload-artifact@v3
+      with:
+        name: dist
+        path: nursery-system/frontend/dist
+        retention-days: 7

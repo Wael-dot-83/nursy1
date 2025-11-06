@@ -7,7 +7,7 @@ import {
   useState,
   useRef,
 } from 'react';
-import { apiClient, handleApiError, configureApiClient } from '../lib/apiClient';
+import { apiClient, handleApiError, configureApiClient, getEndpoint } from '../lib/apiClient';
 
 const AuthContext = createContext(null);
 
@@ -34,7 +34,7 @@ export function AuthProvider({ children }) {
   // Refresh access token using httpOnly cookie
   const refreshAccessToken = useCallback(async () => {
     try {
-      const { data } = await apiClient.post('/auth/refresh', {}, {
+      const { data } = await apiClient.post(getEndpoint('/auth/refresh'), {}, {
         withCredentials: true, // Send httpOnly cookies
       });
 
@@ -47,7 +47,10 @@ export function AuthProvider({ children }) {
       resetAuth();
       return null;
     } catch (err) {
-      console.error('Token refresh failed:', err);
+      // Only log non-401 errors (401 is expected when not authenticated)
+      if (err.response?.status !== 401) {
+        console.error('Token refresh failed:', err);
+      }
       resetAuth();
       return null;
     }
@@ -70,9 +73,9 @@ export function AuthProvider({ children }) {
   }, [refreshAccessToken]);
 
   // Login with email and password
-  const loginWithPassword = useCallback(async ({ email, password }) => {
+  const loginWithPassword = useCallback(async ({ email, password, role }) => {
     try {
-      const { data } = await apiClient.post('/auth/login', { email, password }, {
+      const { data } = await apiClient.post(getEndpoint('/auth/login'), { email, password, role }, {
         withCredentials: true, // Enable cookies
       });
 
@@ -96,10 +99,12 @@ export function AuthProvider({ children }) {
     }
   }, [scheduleTokenRefresh]);
 
+
+
   // Change password
   const changePassword = useCallback(async ({ currentPassword, newPassword }) => {
     try {
-      const { data } = await apiClient.post('/auth/password/change', {
+      const { data } = await apiClient.post(getEndpoint('/auth/password/change'), {
         current_password: currentPassword,
         new_password: newPassword,
       });
@@ -116,7 +121,7 @@ export function AuthProvider({ children }) {
   // Logout
   const logout = useCallback(async () => {
     try {
-      await apiClient.post('/auth/logout', {}, {
+      await apiClient.post(getEndpoint('/auth/logout'), {}, {
         withCredentials: true, // Send cookies for token revocation
       });
     } catch (err) {
@@ -149,19 +154,23 @@ export function AuthProvider({ children }) {
 
         if (token) {
           // Get user info with the refreshed token
-          const { data: userData } = await apiClient.get('/auth/me');
+          const { data: userData } = await apiClient.get(getEndpoint('/auth/me'));
           setUser(userData);
         }
       } catch (err) {
-        console.error('Auth initialization failed:', err);
-        resetAuth();
+        // Only log non-401 errors (401 is expected when not authenticated)
+        if (err.response?.status !== 401) {
+          console.error('Auth initialization failed:', err);
+        }
+        // Don't reset auth here, just mark as not initializing
       } finally {
         setIsInitializing(false);
       }
     };
 
     initializeAuth();
-  }, [refreshAccessToken, resetAuth]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Cleanup timeout on unmount
   useEffect(() => {

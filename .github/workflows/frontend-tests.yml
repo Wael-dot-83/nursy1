@@ -1,0 +1,52 @@
+name: Frontend Tests
+
+on:
+  push:
+    branches: [ main, develop ]
+    paths:
+      - 'nursery-system/frontend/**'
+      - '.github/workflows/frontend-tests.yml'
+  pull_request:
+    branches: [ main, develop ]
+    paths:
+      - 'nursery-system/frontend/**'
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [16.x, 18.x, 20.x]
+
+    steps:
+    - uses: actions/checkout@v3
+
+    - name: Use Node.js ${{ matrix.node-version }}
+      uses: actions/setup-node@v3
+      with:
+        node-version: ${{ matrix.node-version }}
+        cache: 'npm'
+        cache-dependency-path: nursery-system/frontend/package-lock.json
+
+    - name: Install dependencies
+      working-directory: ./nursery-system/frontend
+      run: npm ci
+
+    - name: Run linting
+      working-directory: ./nursery-system/frontend
+      run: npm run lint --if-present
+
+    - name: Run tests
+      working-directory: ./nursery-system/frontend
+      run: npm run test:run -- --coverage
+
+    - name: Build
+      working-directory: ./nursery-system/frontend
+      run: npm run build
+
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        directory: ./nursery-system/frontend/coverage
+        flags: frontend
+        name: frontend-coverage

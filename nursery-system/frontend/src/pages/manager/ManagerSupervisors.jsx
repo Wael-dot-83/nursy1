@@ -16,13 +16,13 @@ export default function ManagerSupervisors() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['manager-supervisors'],
     queryFn: async () => {
-      const response = await apiClient.get('/manager/supervisors');
+      const response = await apiClient.get('/api/manager/supervisors');
       return response.data;
     },
   });
 
   const createMutation = useMutation({
-    mutationFn: (supervisorData) => apiClient.post('/manager/supervisors', supervisorData),
+    mutationFn: (supervisorData) => apiClient.post('/api/manager/supervisors', supervisorData),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-supervisors'] });
       setShowAddModal(false);

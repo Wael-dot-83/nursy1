@@ -287,7 +287,7 @@ export default function AuditLogs() {
   const { data: users } = useQuery({
     queryKey: ['admin-users'],
     queryFn: async () => {
-      const response = await apiClient.get('/admin/users');
+      const response = await apiClient.get('/api/admin/users');
       return response.data;
     },
   });

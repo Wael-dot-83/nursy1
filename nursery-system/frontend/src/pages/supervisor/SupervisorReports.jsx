@@ -9,7 +9,7 @@ export default function SupervisorReports({ mode = 'list' }) {
   const childrenQuery = useQuery({
     queryKey: ['supervisor-children'],
     queryFn: async () => {
-      const response = await apiClient.get('/supervisor/children');
+      const response = await apiClient.get('/api/supervisor/children');
       return response.data;
     },
   });
@@ -18,7 +18,7 @@ export default function SupervisorReports({ mode = 'list' }) {
     enabled: mode !== 'create',
     queryKey: ['supervisor-reports'],
     queryFn: async () => {
-      const response = await apiClient.get('/supervisor/reports');
+      const response = await apiClient.get('/api/supervisor/reports');
       return response.data;
     },
   });
@@ -69,7 +69,7 @@ export default function SupervisorReports({ mode = 'list' }) {
         behaviorNotes: form.behaviorNotes || undefined,
         status: 'submitted',
       };
-      const response = await apiClient.post('/supervisor/reports', payload);
+      const response = await apiClient.post('/api/supervisor/reports', payload);
       return response.data;
     },
     onSuccess: () => {

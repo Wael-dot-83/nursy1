@@ -1,11 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Request
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 from sqlalchemy.orm import Session, selectinload
 from typing import List, Optional, Dict, Any
 
 from .database import get_db
 from .models import Nursery, Branch, Classroom, User, RoleEnum
 from .schemas import (
-    NurseryCreate,
+    NurseryCreateRequest,
     NurseryUpdate,
     BranchCreate,
     BranchUpdate,
@@ -13,9 +13,11 @@ from .schemas import (
     ClassroomUpdate,
     BaseResponse,
 )
+from .nursery_service import create_nursery_with_director
 from .dependencies import require_admin
 from .security import hash_password
 from .audit_helper import log_create, log_update, log_delete
+from .nursery_helpers import to_e164_jordan
 
 router = APIRouter()
 
@@ -148,172 +150,196 @@ async def get_nurseries(
     return [_format_nursery(nursery) for nursery in nurseries]
 
 
-@router.post("/nurseries")
+@router.post("/nurseries", status_code=status.HTTP_201_CREATED)
 async def create_nursery(
-    nursery: NurseryCreate,
+    payload: NurseryCreateRequest,
     request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_admin),
 ):
-    import secrets
-    import string
-
-    db_nursery = Nursery(
-        name=nursery.name,
-        main_street=nursery.main_address.get("street"),
-        main_city=nursery.main_address.get("city"),
-        main_governorate=nursery.main_address.get("governorate"),
-        main_postal_code=nursery.main_address.get("postalCode"),
-        main_phone=nursery.main_phone,
-        email=nursery.email,
-        min_age_days=nursery.age_range.get("minAge", 70),
-        max_age_months=nursery.age_range.get("maxAge", 52),
-        notes=nursery.notes,
-        is_active=True,
-    )
-
-    db.add(db_nursery)
-    db.flush()  # Populate primary key
-
-    created_branches: List[Branch] = []
-    branch_ids: List[int] = []
-    manager_credentials: List[Dict[str, Any]] = []
-
-    def generate_password() -> str:
-        return "".join(secrets.choice(string.ascii_letters + string.digits) for _ in range(12))
-
-    def unique_email(preferred: Optional[str], fallback_prefix: str) -> str:
-        if preferred:
-            candidate = preferred.strip().lower()
-            if candidate and not db.query(User).filter(User.email == candidate).first():
-                return candidate
-        base_candidate = f"{fallback_prefix}@nursery.com"
-        if not db.query(User).filter(User.email == base_candidate).first():
-            return base_candidate
-        counter = 1
-        while True:
-            candidate = f"{fallback_prefix}_{counter}@nursery.com"
-            if not db.query(User).filter(User.email == candidate).first():
-                return candidate
-            counter += 1
-
-    def create_manager_account(
-        *,
-        scope: str,
-        email: str,
-        password: str,
-        first_name: str,
-        last_name: str,
-        phone: Optional[str],
-        branch: Optional[Branch] = None,
-    ) -> User:
-        user = User(
-            email=email,
-            hashed_password=hash_password(password),
-            temp_password=password,  # Store temp password for display
-            first_name=first_name,
-            last_name=last_name,
-            phone=phone,
-            role=RoleEnum.MANAGER,
-            nursery_id=db_nursery.id,
+    """Create a nursery with optional branches and auto-provision director/manager accounts."""
+    from .models import Governorate, Branch
+    from .nursery_helpers import normalize_text, to_e164_jordan
+    from .nursery_service import generate_temp_password, _generate_unique_manager_email
+    from .security import hash_password
+    from sqlalchemy.exc import IntegrityError
+    
+    # Validate governorate if provided
+    governorate_id = payload.governorate_id
+    if governorate_id:
+        gov = db.query(Governorate).filter(Governorate.id == governorate_id).first()
+        if not gov:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail={"code": "INVALID_GOVERNORATE", "message": "المحافظة المحددة غير موجودة"}
+            )
+    
+    # Normalize and validate
+    name_normalized = normalize_text(payload.name.strip())
+    phone_normalized = to_e164_jordan(payload.main_phone.strip())
+    
+    # Check for duplicates
+    existing_by_name = db.query(Nursery).filter(
+        Nursery.name_normalized == name_normalized,
+        Nursery.branch_normalized == ""
+    ).first()
+    if existing_by_name:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "NURSERY_NAME_TAKEN", "message": "اسم الحضانة مستخدم بالفعل."}
+        )
+    
+    existing_by_phone = db.query(Nursery).filter(
+        Nursery.phone_normalized == phone_normalized
+    ).first()
+    if existing_by_phone:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail={"code": "NURSERY_PHONE_TAKEN", "message": "رقم الهاتف الرئيسي مستخدم بالفعل."}
+        )
+    
+    try:
+        # Create main nursery
+        nursery = Nursery(
+            name=payload.name.strip(),
+            name_normalized=name_normalized,
+            is_branch=False,
+            branch_name=None,
+            branch_normalized="",
+            main_phone=payload.main_phone.strip(),
+            phone_normalized=phone_normalized,
+            email=payload.email.strip() if payload.email else None,
+            governorate_id=governorate_id,
+            main_governorate=payload.governorate.strip() if payload.governorate else None,
+            main_city=payload.city.strip() if payload.city else None,
+            main_postal_code=payload.postal_code.strip() if payload.postal_code else None,
+            main_street=payload.address_line.strip() if payload.address_line else None,
+            min_age_days=payload.min_age_days,
+            max_age_months=payload.max_age_months,
+            notes=payload.notes.strip() if payload.notes else None,
             is_active=True,
         )
-        db.add(user)
+        db.add(nursery)
         db.flush()
-        manager_credentials.append(
-            {
-                "scope": scope,
-                "username": email,
-                "email": email,
-                "tempPassword": password,
-                "temporaryPassword": password,
-                "fullName": f"{first_name} {last_name}".strip(),
-                "branchId": branch.id if branch else None,
-                "branchName": branch.name if branch else None,
-                "nurseryId": db_nursery.id,
-            }
+        
+        # Create director account
+        director_email = _generate_unique_manager_email(db, payload.name.strip(), None)
+        temp_password = generate_temp_password()
+        
+        director = User(
+            email=director_email,
+            email_normalized=director_email.lower(),
+            hashed_password=hash_password(temp_password),
+            temp_password=temp_password,
+            must_reset_password=True,
+            first_name="Director",
+            last_name=payload.name.strip(),
+            phone=payload.main_phone.strip(),
+            role=RoleEnum.DIRECTOR,
+            nursery_id=nursery.id,
+            branch_id=None,
+            is_active=True,
         )
-        return user
-
-    try:
-        if nursery.branches:
-            for branch_data in nursery.branches:
-                address = branch_data.get("address") or {}
-                branch_phone = (branch_data.get("phone") or branch_data.get("primaryPhone") or "").strip()
-                db_branch = Branch(
-                    nursery_id=db_nursery.id,
-                    name=db_nursery.name,
-                    address_street=address.get("street"),
-                    address_city=address.get("city"),
-                    address_governorate=address.get("governorate"),
-                    address_postal_code=address.get("postalCode"),
-                    phone=branch_phone or None,
+        db.add(director)
+        
+        # Create branches and managers if requested
+        managers = []
+        if payload.has_branches and payload.number_of_branches > 0:
+            for i in range(payload.number_of_branches):
+                # Get branch name from payload or use default
+                branch_name = f"فرع {i + 1}"
+                if i < len(payload.branches) and payload.branches[i].get("name"):
+                    branch_name = payload.branches[i]["name"].strip()
+                
+                # Create Branch record
+                branch = Branch(
+                    nursery_id=nursery.id,
+                    name=branch_name,
+                    address_street=payload.branches[i].get("address", {}).get("street") if i < len(payload.branches) else None,
+                    address_city=payload.branches[i].get("address", {}).get("city") if i < len(payload.branches) else None,
+                    address_governorate=payload.branches[i].get("address", {}).get("governorate") if i < len(payload.branches) else None,
+                    address_postal_code=payload.branches[i].get("address", {}).get("postalCode") if i < len(payload.branches) else None,
+                    phone=payload.branches[i].get("phone") if i < len(payload.branches) else None,
                 )
-                db.add(db_branch)
+                db.add(branch)
                 db.flush()
-                created_branches.append(db_branch)
-                branch_ids.append(db_branch.id)
-
-        main_manager_password = generate_password()
-        main_manager_email = unique_email(nursery.email, f"manager_{db_nursery.id}")
-        create_manager_account(
-            scope="Main",
-            email=main_manager_email,
-            password=main_manager_password,
-            first_name="Manager",
-            last_name=f"Nursery {db_nursery.id}",
-            phone=nursery.main_phone,
-        )
-
-        for idx, branch in enumerate(created_branches, start=1):
-            branch_password = generate_password()
-            branch_email = unique_email(
-                None,
-                f"manager_{db_nursery.id}_branch_{idx}"
-            )
-            create_manager_account(
-                scope=f"Branch {idx}",
-                email=branch_email,
-                password=branch_password,
-                first_name="Manager",
-                last_name=db_nursery.name,
-                phone=branch.phone or nursery.main_phone,
-                branch=branch,
-            )
-
-        # Log the nursery creation
-        log_create(
-            db, current_user, "nursery", db_nursery.id,
-            details={
-                "name": db_nursery.name,
-                "email": db_nursery.email,
-                "branches_count": len(created_branches),
-                "managers_created": len(manager_credentials)
-            },
-            request=request
-        )
-
+                
+                # Create Manager account if enabled
+                if payload.branch_managers_enabled:
+                    manager_email = _generate_unique_manager_email(db, payload.name.strip(), branch_name)
+                    manager_temp_password = generate_temp_password()
+                    
+                    manager = User(
+                        email=manager_email,
+                        email_normalized=manager_email.lower(),
+                        hashed_password=hash_password(manager_temp_password),
+                        temp_password=manager_temp_password,
+                        must_reset_password=True,
+                        first_name="Manager",
+                        last_name=f"{payload.name.strip()} - {branch_name}",
+                        phone=payload.main_phone.strip(),
+                        role=RoleEnum.MANAGER,
+                        nursery_id=nursery.id,
+                        branch_id=branch.id,
+                        is_active=True,
+                    )
+                    db.add(manager)
+                    
+                    managers.append({
+                        "email": manager_email,
+                        "temporaryPassword": manager_temp_password,
+                        "branchName": branch_name
+                    })
+        
         db.commit()
-    except Exception:
-        db.rollback()
-        raise
-
-    db.refresh(db_nursery)
-
-    branches = created_branches or list(db.query(Branch).filter(Branch.nursery_id == db_nursery.id).all())
-    serialized_nursery = _format_nursery(db_nursery, branches=branches)
-    serialized_nursery.update(
-        {
-            "success": True,
-            "nurseryId": db_nursery.id,
-            "branchIds": branch_ids,
-            "managers": manager_credentials,
-            "hasBranches": bool(branch_ids),
+        
+        # Log creation
+        log_create(
+            db,
+            current_user,
+            "nursery",
+            nursery.id,
+            details={
+                "name": payload.name.strip(),
+                "has_branches": payload.has_branches,
+                "number_of_branches": payload.number_of_branches if payload.has_branches else 0,
+                "phone_normalized": phone_normalized,
+            },
+            request=request,
+        )
+        
+        # Return response with nursery and managers
+        response = {
+            "nursery": {
+                "id": nursery.id,
+                "name": nursery.name,
+                "mainPhone": nursery.main_phone,
+                "email": nursery.email,
+                "governorateId": nursery.governorate_id,
+            },
+            "director": {
+                "email": director_email,
+                "temporaryPassword": temp_password
+            },
+            "managers": managers
         }
-    )
-    serialized_nursery["manager"] = manager_credentials[0] if manager_credentials else None
-    return serialized_nursery
-
+        
+        return response
+        
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "DATABASE_ERROR", "message": "تعذّر حفظ البيانات، حاول مرة أخرى لاحقًا."}
+        ) from exc
+    except HTTPException:
+        raise
+    except Exception as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail={"code": "INTERNAL_ERROR", "message": "حدث خطأ غير متوقع، حاول لاحقًا."}
+        ) from exc
 
 @router.get("/nurseries/{nursery_id}")
 async def get_nursery(

@@ -3,6 +3,10 @@ from pydantic import Field, field_validator
 from typing import Optional, List
 import os
 
+# Load environment variables from .env file
+from dotenv import load_dotenv
+load_dotenv()
+
 class Settings(BaseSettings):
     # App settings
     app_name: str = Field(default="Nursery Management System")
@@ -15,7 +19,6 @@ class Settings(BaseSettings):
     jwt_refresh_secret: str = Field(...)
     access_token_expire_minutes: int = Field(default=15)
     refresh_token_expire_days: int = Field(default=7)
-    otp_expire_minutes: int = Field(default=10)
 
     # Database - NO DEFAULT for production
     database_url: str = Field(...)
@@ -43,11 +46,18 @@ class Settings(BaseSettings):
     ])
 
     # CORS - Parse from comma-separated string
-    cors_origins: str = Field(default="http://localhost:5173,http://localhost:3000")
+    cors_origins: str = Field(default="http://localhost:5173,http://localhost:5174,http://localhost:3000")
 
     # Rate Limiting
     rate_limit_per_minute: int = Field(default=60)
     auth_rate_limit_per_minute: int = Field(default=5)
+
+    # Password Reset Settings
+    otp_expire_minutes: int = Field(default=10)
+    max_otp_attempts: int = Field(default=5)
+    max_reset_attempts_per_day: int = Field(default=2)
+    otp_request_rate_limit: str = Field(default="3/hour")
+    password_reset_rate_limit: str = Field(default="2/day")
 
     # Logging
     log_level: str = Field(default="INFO")

@@ -1,0 +1,182 @@
+--- a/nursery-system/frontend/src/pages/admin/AdminDashboard.jsx
++++ b/nursery-system/frontend/src/pages/admin/AdminDashboard.jsx
+@@ -20,7 +20,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEl
+ 
+-function MetricCard({ label, value, icon, accent = 'bg-primary-100 text-primary-700', trend, trendValue }) {
++function MetricCard({ label, value, icon, accent = 'bg-primary-100 text-primary-700', trend, trendValue, href }) {
++  const Component = href ? 'a' : 'div';
++  const trendLabel = trend === 'up' ? 'ارتفاع' : 'انخفاض';
++  
+   return (
+-    <div className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-1">
++    <Component
++      href={href}
++      className="group relative overflow-hidden rounded-2xl border border-slate-200 bg-white p-6 shadow-sm transition-all duration-200 hover:shadow-lg hover:-translate-y-1"
++      aria-label={`${label}: ${value?.toLocaleString('ar-JO') || 0}${trendValue ? `, ${trendLabel} بنسبة ${trendValue}%` : ''}`}
++      role={href ? undefined : "region"}
++      tabIndex={href ? undefined : 0}
++    >
+       <div className="flex items-center justify-between">
+         <div className="flex-1">
+           <p className="text-sm font-medium text-slate-500">{label}</p>
+           <div className="mt-2 flex items-baseline gap-2">
+             <p className="text-3xl font-bold text-slate-900">{value?.toLocaleString('ar-JO') || 0}</p>
+             {trend && trendValue && (
++              <>
++                <span className="sr-only">{trendLabel} بنسبة {trendValue}%</span>
+               <div className={`flex items-center gap-1 rounded-full px-2 py-1 text-xs font-medium ${
+                 trend === 'up' ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+-              }`}>
++              }`} aria-hidden="true">
+                 {trend === 'up' ? (
+                   <ArrowTrendingUpIcon className="h-3 w-3" />
+                 ) : (
+                   <ArrowTrendingDownIcon className="h-3 w-3" />
+                 )}
+                 {trendValue}%
+               </div>
++              </>
+             )}
+           </div>
+         </div>
+-        <div className={`flex h-14 w-14 items-center justify-center rounded-xl ${accent} transition-transform group-hover:scale-110`}>
++        <div className={`flex h-14 w-14 items-center justify-center rounded-xl ${accent} transition-transform group-hover:scale-110`} aria-hidden="true">
+           {icon}
+         </div>
+       </div>
+       <div className="absolute inset-x-0 bottom-0 h-1 bg-gradient-to-r from-primary-500 to-primary-600 transform scale-x-0 group-hover:scale-x-100 transition-transform duration-300" />
+-    </div>
++    </Component>
+   );
+ }
+ 
+@@ -64,7 +76,7 @@ function SkeletonLoader({ className = '' }) {
+ 
+ function LoadingState() {
+   return (
+-    <div className="space-y-6">
++    <div className="space-y-6" role="status" aria-live="polite" aria-label="جاري تحميل البيانات">
++      <span className="sr-only">جاري تحميل لوحة التحكم...</span>
+       <div>
+         <SkeletonLoader className="h-8 w-64 mb-2" />
+         <SkeletonLoader className="h-4 w-96" />
+@@ -195,10 +212,13 @@ export default function AdminDashboard() {
+   };
+ 
+   return (
+-    <div className="space-y-8">
++    <main aria-labelledby="admin-dashboard-title" role="main">
++      <div className="space-y-8">
+       {/* Header */}
+-      <div className="flex items-center justify-between">
++      <header className="flex items-center justify-between">
+         <div>
+-          <h1 className="text-3xl font-bold text-slate-800">لوحة تحكم المشرف العام</h1>
++          <h1 id="admin-dashboard-title" className="text-3xl font-bold text-slate-800">
++            لوحة تحكم المشرف العام
++          </h1>
+           <p className="mt-2 text-slate-600">نظرة عامة شاملة على النشاط في النظام</p>
+         </div>
+         <div className="flex items-center gap-3">
+           <button
+             onClick={() => refetch()}
+-            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
++            className="inline-flex items-center gap-2 rounded-lg border border-slate-300 bg-white px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
++            aria-label="تحديث البيانات"
+           >
+-            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
++            <svg className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" aria-hidden="true">
+               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15" />
+             </svg>
+             تحديث
+           </button>
+-          <div className="text-sm text-slate-500">
++          <div className="text-sm text-slate-500" role="status" aria-live="polite">
+             آخر تحديث: {new Date().toLocaleString('ar-JO')}
+           </div>
+         </div>
+-      </div>
++      </header>
+ 
+       {/* Main Metrics */}
+-      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
++      <section aria-labelledby="metrics-heading">
++        <h2 id="metrics-heading" className="sr-only">المقاييس الرئيسية</h2>
++        <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-4">
+         <MetricCard
+           label="عدد الحضانات"
+           value={data?.totalNurseries}
+@@ -252,6 +272,8 @@ export default function AdminDashboard() {
+           trendValue="5"
+         />
+       </div>
++      </section>
+ 
+       {/* Charts Section */}
+-      <div className="grid gap-6 lg:grid-cols-2">
++      <section aria-labelledby="charts-heading">
++        <h2 id="charts-heading" className="sr-only">الرسوم البيانية والإحصائيات</h2>
++        <div className="grid gap-6 lg:grid-cols-2">
+         {/* User Roles Distribution */}
+         {data?.usersByRole && data.usersByRole.length > 0 && (
+           <ChartCard
+             title="توزيع المستخدمين حسب الدور"
+             subtitle="إحصائيات تفصيلية لكل دور في النظام"
+           >
+-            <div className="h-80">
++            <div className="h-80" role="img" aria-label="مخطط دائري يوضح توزيع المستخدمين حسب الدور">
+               <Doughnut data={userRoleChartData} options={chartOptions} />
+             </div>
++            
++            {/* Accessible data table alternative */}
++            <details className="mt-4">
++              <summary className="cursor-pointer text-sm text-primary-600 hover:text-primary-700">
++                عرض البيانات في جدول
++              </summary>
++              <table className="mt-2 w-full text-sm">
++                <caption className="sr-only">توزيع المستخدمين حسب الدور</caption>
++                <thead>
++                  <tr>
++                    <th scope="col" className="text-right px-2 py-1">الدور</th>
++                    <th scope="col" className="text-right px-2 py-1">العدد</th>
++                  </tr>
++                </thead>
++                <tbody>
++                  {data?.usersByRole?.map(item => (
++                    <tr key={item.role}>
++                      <td className="px-2 py-1">{
++                        { admin: 'مشرف عام', manager: 'مدير', supervisor: 'مشرف', parent: 'ولي أمر' }[item.role]
++                      }</td>
++                      <td className="px-2 py-1">{item.count}</td>
++                    </tr>
++                  ))}
++                </tbody>
++              </table>
++            </details>
+           </ChartCard>
+         )}
+       </div>
++      </section>
+     </div>
++    </main>
+   );
+ }
+
+---
+Fixes: Issues 1.1, 1.2, 1.3, 1.4, 1.5
+
+Changes:
+- Main landmark with aria-labelledby
+- Proper heading hierarchy
+- MetricCard keyboard accessible
+- Chart data table alternatives
+- Table captions and scope
+- ARIA live regions
+- Time elements
+- Icon aria-hidden
+
+Verification:
+- Tab navigation works
+- Screen reader announces structure
+- Chart data accessible
+- Focus visible

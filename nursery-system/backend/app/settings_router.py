@@ -151,10 +151,21 @@ async def update_organization_settings(
     return {"message": "Organization settings updated", "organization": settings["organization"]}
 
 @router.get("/governorates")
-async def get_governorates():
-    """Get list of governorates"""
-    settings = get_settings()
-    return {"governorates": settings.get("governorates", [])}
+async def get_governorates(db: Session = Depends(get_db)):
+    """Get list of all governorates from database"""
+    from .models import Governorate
+    governorates = db.query(Governorate).order_by(Governorate.name_ar).all()
+    return {
+        "governorates": [
+            {
+                "id": g.id,
+                "name_en": g.name_en,
+                "name_ar": g.name_ar,
+                "code": g.code
+            }
+            for g in governorates
+        ]
+    }
 
 @router.post("/governorates")
 async def add_governorate(

@@ -1,4 +1,4 @@
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, event
 from sqlalchemy.orm import sessionmaker
 
 from .settings import settings
@@ -19,6 +19,14 @@ engine = create_engine(
     echo=False,
     connect_args=connect_args
 )
+
+# For SQLite, ensure UTF-8 encoding
+if "sqlite" in DATABASE_URL.lower():
+    @event.listens_for(engine, "connect")
+    def set_sqlite_pragma(dbapi_conn, connection_record):
+        cursor = dbapi_conn.cursor()
+        cursor.execute("PRAGMA encoding = 'UTF-8'")
+        cursor.close()
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)

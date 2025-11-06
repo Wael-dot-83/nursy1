@@ -14,11 +14,12 @@ os.environ.setdefault("JWT_REFRESH_SECRET", "tests-refresh-secret-key-should-be-
 os.environ.setdefault("DATABASE_URL", "sqlite:///./test_app.db")
 os.environ.setdefault("LOG_LEVEL", "INFO")
 os.environ.setdefault("APP_DISABLE_LOGGING", "1")
+os.environ.setdefault("AUTH_RATE_LIMIT_PER_MINUTE", "1000")  # High limit for tests to avoid rate limiting
 
-from app.main import app  # noqa: E402
-from app.database import get_db  # noqa: E402
-from app.models import Base, User, RoleEnum  # noqa: E402
-from app.security import hash_password  # noqa: E402
+from app.main import app
+from app.database import get_db
+from app.models import Base, User, RoleEnum
+from app.security import hash_password
 
 TEST_DATABASE_URL = "sqlite:///./test.db"
 
@@ -90,3 +91,17 @@ def admin_user(db_session) -> User:
     db_session.add(user)
     db_session.flush()
     return user
+
+
+@pytest.fixture
+def admin_token(client, admin_user) -> str:
+    """Get an admin access token for authenticated requests."""
+    response = client.post(
+        "/auth/login",
+        json={
+            "email": admin_user.email,
+            "password": "TestPass123!",
+        }
+    )
+    assert response.status_code == 200
+    return response.json()["access_token"]

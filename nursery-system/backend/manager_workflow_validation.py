@@ -592,19 +592,16 @@ def generate_manager_report():
     if any("duplicate" in i['description'].lower() for i in all_issues):
         findings.append("⚠ Data integrity checks needed")
 
-    for finding in findings:
-        print(f"  {finding}")
+    if findings:
+        for finding in findings:
+            print(f"  - {finding}")
+    else:
+        print(f"  {Color.GREEN}✓ No major systemic issues found.{Color.END}")
 
-    if not findings:
-        print(f"  {Color.GREEN}✓ No major issues found{Color.END}")
-
-    # Recommendations
-    print(f"\n{Color.BOLD}Priority Recommendations:{Color.END}")
-    print("  1. Add audit logging to all manager operations")
-    print("  2. Implement Pydantic schema validation")
-    print("  3. Add phone/email format validation")
-    print("  4. Verify nursery scope in all operations")
-    print("  5. Add comprehensive error handling")
+    print(f"\n{Color.BOLD}Recommendations:{Color.END}")
+    print("  - Address all CRITICAL and HIGH priority issues immediately.")
+    print("  - Review and improve input validation across all manager-related endpoints.")
+    print("  - Implement comprehensive audit logging for all state-changing operations.")
 
 def run_all_manager_tests():
     """Run all manager workflow validation tests"""
