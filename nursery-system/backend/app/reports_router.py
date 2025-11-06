@@ -3,13 +3,14 @@ from sqlalchemy.orm import Session
 from typing import List, Optional
 from datetime import date, datetime
 from .database import get_db
-from .models import DailyReport, Child, User, Classroom, Branch, Attendance
+from .models import DailyReport, Child, User, Classroom, Branch, Attendance, ReportStatus
 from .schemas import (
     DailyReportResponse, DailyReportCreate, DailyReportUpdate,
     BaseResponse, ChildStats, NurseryStats
 )
 from .dependencies import require_admin, require_manager, require_supervisor, require_parent
 from .audit_helper import log_create, log_update, log_delete
+from .helpers import get_supervisor_classroom_ids
 
 router = APIRouter()
 
@@ -156,12 +157,13 @@ async def get_my_nursery_reports(
     db: Session = Depends(get_db),
     current_user: User = Depends(require_supervisor)
 ):
-    """Get daily reports for supervisor's nursery (Supervisor only)"""
-    if not current_user.nursery_id:
-        raise HTTPException(status_code=400, detail="User not assigned to a nursery")
+    """Get daily reports for supervisor's assigned classrooms (Supervisor only)"""
+    classroom_ids = get_supervisor_classroom_ids(db, current_user.id)
+    if not classroom_ids:
+        return []
 
-    query = db.query(DailyReport).join(Child).join(Classroom).join(Branch).filter(
-        Branch.nursery_id == current_user.nursery_id
+    query = db.query(DailyReport).join(Child).filter(
+        Child.classroom_id.in_(classroom_ids)
     )
 
     if date_from:
@@ -176,20 +178,22 @@ async def get_my_nursery_reports(
 async def create_child_report(
     child_id: int,
     report: DailyReportCreate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_supervisor)
 ):
     """Create daily report for a child (Supervisor only)"""
-    if not current_user.nursery_id:
-        raise HTTPException(status_code=400, detail="User not assigned to a nursery")
+    classroom_ids = get_supervisor_classroom_ids(db, current_user.id)
+    if not classroom_ids:
+        raise HTTPException(status_code=400, detail="No classrooms assigned to supervisor")
 
-    # Verify child belongs to supervisor's nursery
-    child = db.query(Child).join(Classroom).join(Branch).filter(
+    # Verify child belongs to supervisor's assigned classrooms
+    child = db.query(Child).filter(
         Child.id == child_id,
-        Branch.nursery_id == current_user.nursery_id
+        Child.classroom_id.in_(classroom_ids)
     ).first()
     if not child:
-        raise HTTPException(status_code=404, detail="Child not found in your nursery")
+        raise HTTPException(status_code=404, detail="Child not found in your assigned classrooms")
 
     # Ensure report is for the correct child
     if report.child_id != child_id:
@@ -206,6 +210,10 @@ async def create_child_report(
     # Create daily report
     db_report = DailyReport(**report.dict())
     db.add(db_report)
+    db.flush()
+    
+    log_create(db, current_user, "daily_report", db_report.id, details={"child_id": child_id, "date": str(report.date)}, request=request)
+    
     db.commit()
     db.refresh(db_report)
     return db_report
@@ -215,20 +223,22 @@ async def update_child_report(
     child_id: int,
     report_date: date,
     report_update: DailyReportUpdate,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_supervisor)
 ):
     """Update daily report for a child (Supervisor only)"""
-    if not current_user.nursery_id:
-        raise HTTPException(status_code=400, detail="User not assigned to a nursery")
+    classroom_ids = get_supervisor_classroom_ids(db, current_user.id)
+    if not classroom_ids:
+        raise HTTPException(status_code=400, detail="No classrooms assigned to supervisor")
 
-    # Verify child belongs to supervisor's nursery
-    child = db.query(Child).join(Classroom).join(Branch).filter(
+    # Verify child belongs to supervisor's assigned classrooms
+    child = db.query(Child).filter(
         Child.id == child_id,
-        Branch.nursery_id == current_user.nursery_id
+        Child.classroom_id.in_(classroom_ids)
     ).first()
     if not child:
-        raise HTTPException(status_code=404, detail="Child not found in your nursery")
+        raise HTTPException(status_code=404, detail="Child not found in your assigned classrooms")
 
     # Get existing report
     report = db.query(DailyReport).filter(
@@ -239,9 +249,92 @@ async def update_child_report(
         raise HTTPException(status_code=404, detail="Daily report not found")
 
     # Update fields
-    for field, value in report_update.dict(exclude_unset=True).items():
+    changes = report_update.dict(exclude_unset=True)
+    for field, value in changes.items():
         setattr(report, field, value)
+    
+    if changes:
+        log_update(db, current_user, "daily_report", report.id, details={"changes": changes}, request=request)
 
+    db.commit()
+    db.refresh(report)
+    return report
+
+# Manager moderation endpoints
+@router.get("/manager/reports/pending", response_model=List[DailyReportResponse])
+async def get_pending_reports(
+    skip: int = 0,
+    limit: int = 100,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager)
+):
+    """Get pending reports in manager's nursery (Manager only)"""
+    if not current_user.nursery_id:
+        raise HTTPException(status_code=400, detail="Manager not assigned to a nursery")
+    
+    reports = db.query(DailyReport).join(Child).join(Classroom).join(Branch).filter(
+        Branch.nursery_id == current_user.nursery_id,
+        DailyReport.status == ReportStatus.PENDING
+    ).order_by(DailyReport.date.desc()).offset(skip).limit(limit).all()
+    
+    return reports
+
+@router.put("/manager/reports/{report_id}/approve", response_model=DailyReportResponse)
+async def approve_report(
+    report_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager)
+):
+    """Approve a daily report (Manager only)"""
+    if not current_user.nursery_id:
+        raise HTTPException(status_code=400, detail="Manager not assigned to a nursery")
+    
+    # Verify report belongs to manager's nursery
+    report = db.query(DailyReport).join(Child).join(Classroom).join(Branch).filter(
+        DailyReport.id == report_id,
+        Branch.nursery_id == current_user.nursery_id
+    ).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found in your nursery")
+    
+    report.status = ReportStatus.APPROVED
+    report.reviewed_by = current_user.id
+    report.reviewed_at = datetime.utcnow()
+    
+    log_update(db, current_user, "daily_report", report_id, details={"action": "approve", "status": "approved"}, request=request)
+    
+    db.commit()
+    db.refresh(report)
+    return report
+
+@router.put("/manager/reports/{report_id}/request-revision", response_model=DailyReportResponse)
+async def request_revision(
+    report_id: int,
+    feedback: str,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager)
+):
+    """Request revision on a daily report (Manager only)"""
+    if not current_user.nursery_id:
+        raise HTTPException(status_code=400, detail="Manager not assigned to a nursery")
+    
+    # Verify report belongs to manager's nursery
+    report = db.query(DailyReport).join(Child).join(Classroom).join(Branch).filter(
+        DailyReport.id == report_id,
+        Branch.nursery_id == current_user.nursery_id
+    ).first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Report not found in your nursery")
+    
+    report.status = ReportStatus.REVISION
+    report.manager_feedback = feedback
+    report.reviewed_by = current_user.id
+    report.reviewed_at = datetime.utcnow()
+    
+    log_update(db, current_user, "daily_report", report_id, details={"action": "request_revision", "status": "revision", "feedback": feedback}, request=request)
+    
     db.commit()
     db.refresh(report)
     return report

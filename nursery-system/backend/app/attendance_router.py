@@ -10,6 +10,7 @@ from .schemas import (
 )
 from .dependencies import require_admin, require_manager, require_supervisor, require_parent
 from .audit_helper import log_create, log_update, log_delete
+from .helpers import get_supervisor_classroom_ids
 
 router = APIRouter()
 
@@ -183,20 +184,22 @@ async def get_my_nursery_attendance(
 @router.post("/check-in/{child_id}")
 async def check_in_child(
     child_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_supervisor)
 ):
     """Check in a child (Supervisor only)"""
-    if not current_user.nursery_id:
-        raise HTTPException(status_code=400, detail="User not assigned to a nursery")
+    classroom_ids = get_supervisor_classroom_ids(db, current_user.id)
+    if not classroom_ids:
+        raise HTTPException(status_code=400, detail="No classrooms assigned to supervisor")
 
-    # Verify child belongs to supervisor's nursery
-    child = db.query(Child).join(Classroom).join(Branch).filter(
+    # Verify child belongs to supervisor's assigned classrooms
+    child = db.query(Child).filter(
         Child.id == child_id,
-        Branch.nursery_id == current_user.nursery_id
+        Child.classroom_id.in_(classroom_ids)
     ).first()
     if not child:
-        raise HTTPException(status_code=404, detail="Child not found in your nursery")
+        raise HTTPException(status_code=404, detail="Child not found in your assigned classrooms")
 
     today = date.today()
 
@@ -220,6 +223,8 @@ async def check_in_child(
         )
         db.add(attendance)
 
+    log_create(db, current_user, "attendance", attendance.id, details={"child_id": child_id, "action": "check_in"}, request=request)
+    
     db.commit()
     db.refresh(attendance)
     return {"message": "Child checked in successfully", "attendance": attendance}
@@ -227,20 +232,22 @@ async def check_in_child(
 @router.post("/check-out/{child_id}")
 async def check_out_child(
     child_id: int,
+    request: Request,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_supervisor)
 ):
     """Check out a child (Supervisor only)"""
-    if not current_user.nursery_id:
-        raise HTTPException(status_code=400, detail="User not assigned to a nursery")
+    classroom_ids = get_supervisor_classroom_ids(db, current_user.id)
+    if not classroom_ids:
+        raise HTTPException(status_code=400, detail="No classrooms assigned to supervisor")
 
-    # Verify child belongs to supervisor's nursery
-    child = db.query(Child).join(Classroom).join(Branch).filter(
+    # Verify child belongs to supervisor's assigned classrooms
+    child = db.query(Child).filter(
         Child.id == child_id,
-        Branch.nursery_id == current_user.nursery_id
+        Child.classroom_id.in_(classroom_ids)
     ).first()
     if not child:
-        raise HTTPException(status_code=404, detail="Child not found in your nursery")
+        raise HTTPException(status_code=404, detail="Child not found in your assigned classrooms")
 
     today = date.today()
 
@@ -257,9 +264,107 @@ async def check_out_child(
         raise HTTPException(status_code=400, detail="Child already checked out today")
 
     attendance.check_out_time = datetime.now().time()
+    
+    log_update(db, current_user, "attendance", attendance.id, details={"child_id": child_id, "action": "check_out"}, request=request)
+    
     db.commit()
     db.refresh(attendance)
     return {"message": "Child checked out successfully", "attendance": attendance}
+
+# Manager CRUD endpoints
+@router.post("/manager/attendance", response_model=AttendanceResponse)
+async def manager_create_attendance(
+    attendance: AttendanceCreate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager)
+):
+    """Create attendance record in manager's nursery (Manager only)"""
+    if not current_user.nursery_id:
+        raise HTTPException(status_code=400, detail="Manager not assigned to a nursery")
+    
+    # Verify child belongs to manager's nursery
+    child = db.query(Child).join(Classroom).join(Branch).filter(
+        Child.id == attendance.child_id,
+        Branch.nursery_id == current_user.nursery_id
+    ).first()
+    if not child:
+        raise HTTPException(status_code=404, detail="Child not found in your nursery")
+    
+    # Check duplicate
+    existing = db.query(Attendance).filter(
+        Attendance.child_id == attendance.child_id,
+        Attendance.date == attendance.date
+    ).first()
+    if existing:
+        raise HTTPException(status_code=400, detail="Attendance already recorded for this child on this date")
+    
+    db_attendance = Attendance(**attendance.dict())
+    db.add(db_attendance)
+    db.flush()
+    
+    log_create(db, current_user, "attendance", db_attendance.id, details={"child_id": db_attendance.child_id, "date": str(db_attendance.date)}, request=request)
+    
+    db.commit()
+    db.refresh(db_attendance)
+    return db_attendance
+
+@router.put("/manager/attendance/{attendance_id}", response_model=AttendanceResponse)
+async def manager_update_attendance(
+    attendance_id: int,
+    attendance_update: AttendanceUpdate,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager)
+):
+    """Update attendance record in manager's nursery (Manager only)"""
+    if not current_user.nursery_id:
+        raise HTTPException(status_code=400, detail="Manager not assigned to a nursery")
+    
+    # Verify attendance belongs to manager's nursery
+    attendance = db.query(Attendance).join(Child).join(Classroom).join(Branch).filter(
+        Attendance.id == attendance_id,
+        Branch.nursery_id == current_user.nursery_id
+    ).first()
+    if not attendance:
+        raise HTTPException(status_code=404, detail="Attendance record not found in your nursery")
+    
+    changes = attendance_update.dict(exclude_unset=True)
+    
+    for field, value in changes.items():
+        setattr(attendance, field, value)
+    
+    if changes:
+        log_update(db, current_user, "attendance", attendance_id, details={"changes": changes}, request=request)
+    
+    db.commit()
+    db.refresh(attendance)
+    return attendance
+
+@router.delete("/manager/attendance/{attendance_id}", response_model=BaseResponse)
+async def manager_delete_attendance(
+    attendance_id: int,
+    request: Request,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_manager)
+):
+    """Delete attendance record in manager's nursery (Manager only)"""
+    if not current_user.nursery_id:
+        raise HTTPException(status_code=400, detail="Manager not assigned to a nursery")
+    
+    # Verify attendance belongs to manager's nursery
+    attendance = db.query(Attendance).join(Child).join(Classroom).join(Branch).filter(
+        Attendance.id == attendance_id,
+        Branch.nursery_id == current_user.nursery_id
+    ).first()
+    if not attendance:
+        raise HTTPException(status_code=404, detail="Attendance record not found in your nursery")
+    
+    log_delete(db, current_user, "attendance", attendance_id, details={"child_id": attendance.child_id, "date": str(attendance.date)}, request=request)
+    
+    db.delete(attendance)
+    db.commit()
+    return BaseResponse(message="Attendance record deleted successfully")
 
 # Parent endpoints
 @router.get("/parent/{child_id}", response_model=List[AttendanceResponse])

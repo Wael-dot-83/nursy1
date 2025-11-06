@@ -1,5 +1,5 @@
 from sqlalchemy.orm import relationship, declarative_base
-from sqlalchemy import Column, String, Integer, ForeignKey, Enum, Date, DateTime, Boolean, Text, JSON, DECIMAL, SmallInteger, Index
+from sqlalchemy import Column, String, Integer, ForeignKey, Enum, Date, DateTime, Boolean, Text, JSON, DECIMAL, SmallInteger, Index, Table
 from datetime import datetime
 import enum
 
@@ -22,19 +22,34 @@ class ChildStatus(str, enum.Enum):
     INACTIVE = "inactive"
     GRADUATED = "graduated"
 
+class ReportStatus(str, enum.Enum):
+    PENDING = "pending"
+    APPROVED = "approved"
+    REVISION = "revision"
+
+# Association Tables
+supervisors_classrooms = Table(
+    'supervisors_classrooms',
+    Base.metadata,
+    Column('supervisor_id', Integer, ForeignKey('users.id'), primary_key=True),
+    Column('classroom_id', Integer, ForeignKey('classrooms.id'), primary_key=True),
+    Column('assigned_at', DateTime, default=datetime.utcnow)
+)
+
 # Models
 class User(Base):
     __tablename__ = "users"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
+    username = Column(String(100), nullable=True, unique=True)
     email = Column(String(150), nullable=True, unique=True)
     first_name = Column(String(50), nullable=False)
     last_name = Column(String(50), nullable=False)
-    phone = Column(String(15), nullable=True)
+    phone = Column(String(15), nullable=True, unique=True)
     role = Column(Enum(RoleEnum), nullable=False)
     is_active = Column(Boolean, default=True, nullable=False)
     hashed_password = Column(String(255), nullable=True)
-    temp_password = Column(String(255), nullable=True)  # Temporary password for display/management
+    temp_password = Column(String(255), nullable=True)
     nursery_id = Column(Integer, ForeignKey("nurseries.id"), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
@@ -43,10 +58,12 @@ class User(Base):
     nursery = relationship("Nursery", back_populates="users")
     children = relationship("Child", back_populates="parent")
     notifications = relationship("Notification", back_populates="user", lazy="dynamic")
+    assigned_classrooms = relationship("Classroom", secondary=supervisors_classrooms, back_populates="supervisors")
 
     __table_args__ = (
         Index('idx_users_role', 'role'),
         Index('idx_users_nursery', 'nursery_id'),
+        Index('idx_users_username', 'username'),
     )
 
 class Nursery(Base):
@@ -103,15 +120,20 @@ class Classroom(Base):
     # Relationships
     branch = relationship("Branch", back_populates="classrooms")
     children = relationship("Child", back_populates="classroom")
+    supervisors = relationship("User", secondary=supervisors_classrooms, back_populates="assigned_classrooms")
 
 class Child(Base):
     __tablename__ = "children"
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     first_name = Column(String(50), nullable=False)
+    second_name = Column(String(50), nullable=True)
     last_name = Column(String(50), nullable=False)
     date_of_birth = Column(Date, nullable=False)
     gender = Column(String(10), nullable=False)
+    nationality = Column(String(100), nullable=True)
+    national_id = Column(String(50), nullable=True)
+    passport_no = Column(String(50), nullable=True)
     medical_info = Column(Text, nullable=True)
     emergency_contact = Column(String(100), nullable=False)
     emergency_phone = Column(String(15), nullable=False)
@@ -164,14 +186,20 @@ class DailyReport(Base):
     naps = Column(Text, nullable=True)
     mood = Column(String(20), nullable=True)
     notes = Column(Text, nullable=True)
+    status = Column(Enum(ReportStatus), default=ReportStatus.PENDING, nullable=False)
+    manager_feedback = Column(Text, nullable=True)
+    reviewed_by = Column(Integer, ForeignKey("users.id"), nullable=True)
+    reviewed_at = Column(DateTime, nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
     # Relationships
     child = relationship("Child", back_populates="daily_reports")
+    reviewer = relationship("User", foreign_keys=[reviewed_by])
 
     __table_args__ = (
         Index('idx_daily_reports_child_date', 'child_id', 'date'),
+        Index('idx_daily_reports_status', 'status'),
     )
 
 class FileAsset(Base):
@@ -249,12 +277,13 @@ class AuditLog(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     user_id = Column(Integer, ForeignKey("users.id"), nullable=True)
-    action = Column(String(100), nullable=False)  # create, update, delete, login, logout
-    resource_type = Column(String(50), nullable=False)  # user, child, nursery, etc.
+    action = Column(String(100), nullable=False)
+    resource_type = Column(String(50), nullable=False)
     resource_id = Column(Integer, nullable=True)
-    details = Column(JSON, nullable=True)  # Additional details about the action
+    details = Column(JSON, nullable=True)
     ip_address = Column(String(45), nullable=True)
     user_agent = Column(String(500), nullable=True)
+    correlation_id = Column(String(100), nullable=True)
     created_at = Column(DateTime, default=datetime.utcnow)
 
     # Relationships
@@ -265,6 +294,7 @@ class AuditLog(Base):
         Index('idx_audit_logs_action', 'action'),
         Index('idx_audit_logs_resource', 'resource_type', 'resource_id'),
         Index('idx_audit_logs_created', 'created_at'),
+        Index('idx_audit_logs_correlation', 'correlation_id'),
     )
 
 class LoginAttempt(Base):
