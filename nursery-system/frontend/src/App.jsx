@@ -4,6 +4,12 @@ import { useAuth } from './contexts/AuthContext';
 import ProtectedRoute from './routes/ProtectedRoute';
 import DashboardLayout from './layouts/DashboardLayout';
 import LoginPage from './pages/auth/Login';
+import ManagerLoginPage from './pages/auth/ManagerLogin';
+import SupervisorLoginPage from './pages/auth/SupervisorLogin';
+import ParentLoginPage from './pages/auth/ParentLogin';
+import ChangePasswordPage from './pages/auth/ChangePasswordPage';
+import ForgotPasswordPage from './pages/auth/ForgotPassword';
+import ResetPasswordPage from './pages/auth/ResetPassword';
 import NotFoundPage from './pages/misc/NotFound';
 import ProfilePage from './pages/profile/ProfilePage';
 import SettingsPage from './pages/settings/SettingsPage';
@@ -60,6 +66,15 @@ export default function App() {
   return (
     <Routes>
       <Route path="/login" element={<LoginPage />} />
+      <Route path="/manager-login" element={<ManagerLoginPage />} />
+      <Route path="/supervisor-login" element={<SupervisorLoginPage />} />
+      <Route path="/parent-login" element={<ParentLoginPage />} />
+      <Route path="/forgot-password" element={<ForgotPasswordPage />} />
+      <Route path="/reset-password" element={<ResetPasswordPage />} />
+
+      <Route element={<ProtectedRoute />}>
+        <Route path="/change-password" element={<ChangePasswordPage />} />
+      </Route>
 
       <Route element={<ProtectedRoute />}>
         <Route path="/" element={<RoleLanding />} />

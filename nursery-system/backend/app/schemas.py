@@ -2,6 +2,7 @@ from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, time
 from .models import RoleEnum, AttendanceStatus, ChildStatus
+from .nursery_helpers import validate_jordan_phone as _is_valid_jordan_phone
 
 # Base schemas
 class BaseResponse(BaseModel):
@@ -16,13 +17,15 @@ class ErrorResponse(BaseResponse):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+    role: Optional[str] = None  # Optional role parameter for role-aware authentication
 
-class OTPRequest(BaseModel):
-    email: EmailStr
-
-class OTPVerifyRequest(BaseModel):
-    email: EmailStr
-    otp_code: str = Field(..., min_length=6, max_length=6)
+# DEPRECATED: OTP authentication feature removed
+# class OTPRequest(BaseModel):
+#     email: EmailStr
+#
+# class OTPVerifyRequest(BaseModel):
+#     email: EmailStr
+#     otp_code: str = Field(..., min_length=6, max_length=6)
 
 class TokenResponse(BaseModel):
     access_token: str
@@ -42,6 +45,49 @@ class PasswordChangeRequest(BaseModel):
     def validate_new_password(cls, v, info):
         if 'current_password' in info.data and v == info.data['current_password']:
             raise ValueError('New password must be different from current password')
+        return v
+
+# Password reset schemas
+class PasswordResetRequest(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=15)
+    
+    @field_validator('phone')
+    @classmethod
+    def validate_phone(cls, v):
+        import re
+        if not re.match(r'^07\d{8}$', v):
+            raise ValueError('Phone number must be in format 07XXXXXXXX')
+        return v
+
+class PasswordResetVerify(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=15)
+    otp: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$')
+
+class PasswordResetConfirm(BaseModel):
+    phone: str = Field(..., min_length=10, max_length=15)
+    otp: str = Field(..., min_length=6, max_length=6, pattern=r'^\d{6}$')
+    new_password: str = Field(..., min_length=8)
+    
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
+        return v
+
+# Password reset schemas (email-based)
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str = Field(..., min_length=32, max_length=64)
+    new_password: str = Field(..., min_length=8)
+
+    @field_validator('new_password')
+    @classmethod
+    def validate_password_strength(cls, v):
+        if len(v) < 8:
+            raise ValueError('Password must be at least 8 characters')
         return v
 
 # User schemas
@@ -101,14 +147,64 @@ class BranchResponse(BranchBase):
     class Config:
         from_attributes = True
 
+# Governorate schemas
+class GovernorateResponse(BaseModel):
+    id: int
+    name_en: str
+    name_ar: str
+    code: str
+
+    class Config:
+        from_attributes = True
+
 # Nursery schemas
 class NurseryBase(BaseModel):
-    name: str = Field(..., min_length=1, max_length=120)
-    main_phone: str = Field(..., min_length=10, max_length=15)
+    name: str = Field(..., min_length=2, max_length=120)
+    main_phone: str = Field(..., max_length=20, alias="mainPhone")
     email: Optional[EmailStr] = None
-    main_address: Dict[str, Any] = Field(default_factory=dict)  # {street, city, governorate, postalCode}
-    age_range: Dict[str, int] = Field(default_factory=lambda: {"minAge": 70, "maxAge": 52})  # {minAge, maxAge}
+    main_address: Dict[str, Any] = Field(default_factory=dict, alias="mainAddress")  # {street, city, governorate, postalCode}
+    age_range: Dict[str, int] = Field(default_factory=lambda: {"minAge": 70, "maxAge": 52}, alias="ageRange")  # {minAge, maxAge}
     notes: Optional[str] = None
+
+    class Config:
+        populate_by_name = True  # Allow both snake_case and camelCase
+
+
+class NurseryCreateRequest(BaseModel):
+    """Schema for creating a new nursery with branches"""
+    name: str = Field(..., min_length=2, max_length=120)
+    main_phone: str = Field(..., max_length=20, alias="mainPhone")
+    email: Optional[EmailStr] = None
+    governorate_id: Optional[int] = Field(None, alias="governorateId")
+    
+    # Address fields (flattened for backend compatibility)
+    governorate: Optional[str] = None
+    city: Optional[str] = None
+    postal_code: Optional[str] = Field(None, alias="postalCode")
+    address_line: Optional[str] = Field(None, alias="addressLine")
+    
+    # Age range fields (flattened for backend compatibility)
+    min_age_days: int = Field(70, alias="minAgeDays")
+    max_age_months: int = Field(52, alias="maxAgeMonths")
+    
+    notes: Optional[str] = None
+    has_branches: bool = Field(False, alias="hasBranches")
+    number_of_branches: int = Field(0, ge=0, le=50, alias="numberOfBranches")
+    branches: List[Dict[str, Any]] = Field(default_factory=list)
+    branch_managers_enabled: bool = Field(True, alias="branchManagersEnabled")
+
+    class Config:
+        populate_by_name = True
+        
+    @field_validator('main_phone')
+    @classmethod
+    def validate_phone(cls, v):
+        import re
+        # Jordan phone format: 07XXXXXXXX or 0XXXXXXX (landline)
+        if not re.match(r'^(07[789]\d{7}|0[2-6]\d{6,7})$', v.replace(' ', '')):
+            raise ValueError('رقم الهاتف غير صحيح (يجب أن يكون رقم أردني صحيح)')
+        return v
+
 
 class NurseryCreate(NurseryBase):
     branches: Optional[List[Dict[str, Any]]] = Field(default_factory=list)  # List of branch data

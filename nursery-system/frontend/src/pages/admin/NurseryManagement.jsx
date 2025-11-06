@@ -1,8 +1,10 @@
-import { useState } from 'react';
+﻿import { useState } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { apiClient, handleApiError } from '../../lib/apiClient';
+import { apiClient, handleApiError, getEndpoint } from '../../lib/apiClient';
 import { FEATURE_FLAGS } from '../../lib/constants';
 import { PlusIcon, PencilIcon, TrashIcon, BuildingStorefrontIcon } from '@heroicons/react/24/outline';
+import CreateNurseryFlow from '../../components/CreateNurseryFlow';
+import { getGovernorates } from '../../lib/api/settings';
 
 const JORDAN_GOVERNORATES = [
   'Amman', 'Irbid', 'Zarqa', 'Balqa', 'Madaba', 'Mafraq',
@@ -10,22 +12,34 @@ const JORDAN_GOVERNORATES = [
 ];
 
 const GOVERNORATE_DISPLAY_NAMES = {
-  'Amman': 'عمان',
-  'Irbid': 'إربد',
-  'Zarqa': 'الزرقاء',
-  'Balqa': 'البلقاء',
-  'Madaba': 'مادبا',
-  'Mafraq': 'المفرق',
-  'Jerash': 'جرش',
-  'Ajloun': 'عجلون',
-  'Karak': 'الكرك',
-  'Tafilah': 'الطفيلة',
-  'Maan': 'معان',
-  'Aqaba': 'العقبة'
+  'Amman': 'Ø¹Ù…Ø§Ù†',
+  'Irbid': 'Ø¥Ø±Ø¨Ø¯',
+  'Zarqa': 'Ø§Ù„Ø²Ø±Ù‚Ø§Ø¡',
+  'Balqa': 'Ø§Ù„Ø¨Ù„Ù‚Ø§Ø¡',
+  'Madaba': 'Ù…Ø§Ø¯Ø¨Ø§',
+  'Mafraq': 'Ø§Ù„Ù…ÙØ±Ù‚',
+  'Jerash': 'Ø¬Ø±Ø´',
+  'Ajloun': 'Ø¹Ø¬Ù„ÙˆÙ†',
+  'Karak': 'Ø§Ù„ÙƒØ±Ùƒ',
+  'Tafilah': 'Ø§Ù„Ø·ÙÙŠÙ„Ø©',
+  'Maan': 'Ù…Ø¹Ø§Ù†',
+  'Aqaba': 'Ø§Ù„Ø¹Ù‚Ø¨Ø©'
 };
 
 function NurseryForm({ nursery, onClose, onSuccess }) {
   const branchManagersEnabled = FEATURE_FLAGS['nursery.branchManagers.v1'];
+  
+  // Fetch governorates from backend
+  const { data: governoratesData } = useQuery({
+    queryKey: ['governorates'],
+    queryFn: async () => {
+      const response = await getGovernorates();
+      return response.data;
+    }
+  });
+  
+  const governorates = governoratesData?.governorates || [];
+  
   const [currentStep, setCurrentStep] = useState(1);
   const [hasBranches, setHasBranches] = useState(nursery?.branches?.length > 0 || false);
   const [numBranches, setNumBranches] = useState(nursery?.branches?.length || 0);
@@ -72,7 +86,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
       await navigator.clipboard.writeText(payload);
     } catch (error) {
       console.error('Failed to copy manager credentials', error);
-      window.prompt('انسخ بيانات المديرين التالية:', payload);
+      window.prompt('Ø§Ù†Ø³Ø® Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø¯ÙŠØ±ÙŠÙ† Ø§Ù„ØªØ§Ù„ÙŠØ©:', payload);
     }
   };
 
@@ -81,9 +95,9 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
   const mutation = useMutation({
     mutationFn: async (data) => {
       if (nursery) {
-        return apiClient.put(`/admin/nurseries/${nursery.id}`, data);
+        return apiClient.put(getEndpoint(`/admin/nurseries/${nursery.id}`), data);
       } else {
-        return apiClient.post('/admin/nurseries', data);
+        return apiClient.post(getEndpoint('/admin/nurseries'), data);
       }
     },
     onSuccess: (response) => {
@@ -140,7 +154,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
         const firstErrorField = Object.keys(backendErrors)[0];
         if (firstErrorField) {
           const element = document.querySelector(`[name="${firstErrorField}"]`) || 
-                         document.querySelector(`input[placeholder*="رقم الهاتف"]`) ||
+                         document.querySelector(`input[placeholder*="Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ"]`) ||
                          document.querySelector(`input[type="text"]`);
           if (element) {
             element.scrollIntoView({ behavior: 'smooth', block: 'center' });
@@ -161,11 +175,11 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
     switch (field) {
       case 'name':
         if (!value.trim()) {
-          newErrors.name = 'اسم الحضانة مطلوب';
+          newErrors.name = 'Ø§Ø³Ù… Ø§Ù„Ø­Ø¶Ø§Ù†Ø© Ù…Ø·Ù„ÙˆØ¨';
         } else if (value.trim().length < 2) {
-          newErrors.name = 'اسم الحضانة يجب أن يكون على الأقل حرفين';
+          newErrors.name = 'Ø§Ø³Ù… Ø§Ù„Ø­Ø¶Ø§Ù†Ø© ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø¹Ù„Ù‰ Ø§Ù„Ø£Ù‚Ù„ Ø­Ø±ÙÙŠÙ†';
         } else if (value.trim().length > 120) {
-          newErrors.name = 'اسم الحضانة يجب ألا يتجاوز 120 حرف';
+          newErrors.name = 'Ø§Ø³Ù… Ø§Ù„Ø­Ø¶Ø§Ù†Ø© ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 120 Ø­Ø±Ù';
         } else {
           delete newErrors.name;
         }
@@ -173,9 +187,9 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
       case 'mainPhone':
         if (!value.trim()) {
-          newErrors.mainPhone = 'رقم الهاتف الرئيسي مطلوب';
+          newErrors.mainPhone = 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ Ù…Ø·Ù„ÙˆØ¨';
         } else if (!/^(07[789]\d{7}|0[2-6]\d{6,7})$/.test(value.replace(/\s+/g, ''))) {
-          newErrors.mainPhone = 'رقم الهاتف غير صحيح (يجب أن يكون رقم أردني صحيح مثل 077XXXXXXX أو 064291511)';
+          newErrors.mainPhone = 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ØºÙŠØ± ØµØ­ÙŠØ­ (ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù… Ø£Ø±Ø¯Ù†ÙŠ ØµØ­ÙŠØ­ Ù…Ø«Ù„ 077XXXXXXX Ø£Ùˆ 064291511)';
         } else {
           delete newErrors.mainPhone;
         }
@@ -183,7 +197,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
       case 'email':
         if (value && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(value)) {
-          newErrors.email = 'البريد الإلكتروني غير صحيح';
+          newErrors.email = 'Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ ØºÙŠØ± ØµØ­ÙŠØ­';
         } else {
           delete newErrors.email;
         }
@@ -191,9 +205,9 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
       case 'minAge':
         if (value < 0) {
-          newErrors.minAge = 'الحد الأدنى للعمر يجب أن يكون رقماً موجباً';
+          newErrors.minAge = 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ Ù„Ù„Ø¹Ù…Ø± ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù…Ø§Ù‹ Ù…ÙˆØ¬Ø¨Ø§Ù‹';
         } else if (value > 365 * 6) { // Max 6 years
-          newErrors.minAge = 'الحد الأدنى للعمر يجب ألا يتجاوز 6 سنوات';
+          newErrors.minAge = 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ Ù„Ù„Ø¹Ù…Ø± ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 6 Ø³Ù†ÙˆØ§Øª';
         } else {
           delete newErrors.minAge;
         }
@@ -201,9 +215,9 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
       case 'maxAge':
         if (value < 0) {
-          newErrors.maxAge = 'الحد الأقصى للعمر يجب أن يكون رقماً موجباً';
+          newErrors.maxAge = 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„Ù„Ø¹Ù…Ø± ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù…Ø§Ù‹ Ù…ÙˆØ¬Ø¨Ø§Ù‹';
         } else if (value > 72) { // Max 6 years
-          newErrors.maxAge = 'الحد الأقصى للعمر يجب ألا يتجاوز 6 سنوات';
+          newErrors.maxAge = 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„Ù„Ø¹Ù…Ø± ÙŠØ¬Ø¨ Ø£Ù„Ø§ ÙŠØªØ¬Ø§ÙˆØ² 6 Ø³Ù†ÙˆØ§Øª';
         } else {
           delete newErrors.maxAge;
         }
@@ -219,26 +233,26 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
     if (step === 1) {
       // Basic info validation
-      if (!formData.name.trim()) newErrors.name = 'اسم الحضانة مطلوب';
-      if (!formData.mainPhone.trim()) newErrors.mainPhone = 'رقم الهاتف الرئيسي مطلوب';
+      if (!formData.name.trim()) newErrors.name = 'Ø§Ø³Ù… Ø§Ù„Ø­Ø¶Ø§Ù†Ø© Ù…Ø·Ù„ÙˆØ¨';
+      if (!formData.mainPhone.trim()) newErrors.mainPhone = 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ Ù…Ø·Ù„ÙˆØ¨';
       if (formData.mainPhone && !/^(07[789]\d{7}|0[2-6]\d{6,7})$/.test(formData.mainPhone.replace(/\s+/g, ''))) {
-        newErrors.mainPhone = 'رقم الهاتف غير صحيح (يجب أن يكون رقم أردني صحيح مثل 077XXXXXXX أو 064291511)';
+        newErrors.mainPhone = 'Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ ØºÙŠØ± ØµØ­ÙŠØ­ (ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù… Ø£Ø±Ø¯Ù†ÙŠ ØµØ­ÙŠØ­ Ù…Ø«Ù„ 077XXXXXXX Ø£Ùˆ 064291511)';
       }
       if (formData.email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email)) {
-        newErrors.email = 'البريد الإلكتروني غير صحيح';
+        newErrors.email = 'Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ ØºÙŠØ± ØµØ­ÙŠØ­';
       }
-      if (formData.ageRange.minAge < 0) newErrors.minAge = 'الحد الأدنى للعمر يجب أن يكون رقماً موجباً';
-      if (formData.ageRange.maxAge < 0) newErrors.maxAge = 'الحد الأقصى للعمر يجب أن يكون رقماً موجباً';
+      if (formData.ageRange.minAge < 0) newErrors.minAge = 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ Ù„Ù„Ø¹Ù…Ø± ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù…Ø§Ù‹ Ù…ÙˆØ¬Ø¨Ø§Ù‹';
+      if (formData.ageRange.maxAge < 0) newErrors.maxAge = 'Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„Ù„Ø¹Ù…Ø± ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù…Ø§Ù‹ Ù…ÙˆØ¬Ø¨Ø§Ù‹';
     }
 
     if (step === 3 && hasBranches) {
       // Branch validation
       formData.branches.forEach((branch, index) => {
         if (!branchManagersEnabled && !branch.name?.trim()) {
-          newErrors[`branch_${index}_name`] = `اسم الفرع ${index + 1} مطلوب`;
+          newErrors[`branch_${index}_name`] = `Ø§Ø³Ù… Ø§Ù„ÙØ±Ø¹ ${index + 1} Ù…Ø·Ù„ÙˆØ¨`;
         }
         if (branch.phone && !/^(07[789]\d{7}|0[2-6]\d{6,7})$/.test(branch.phone.replace(/\s+/g, ''))) {
-          newErrors[`branch_${index}_phone`] = `رقم هاتف الفرع ${index + 1} غير صحيح (يجب أن يكون رقم أردني صحيح مثل 077XXXXXXX أو 064291511)`;
+          newErrors[`branch_${index}_phone`] = `Ø±Ù‚Ù… Ù‡Ø§ØªÙ Ø§Ù„ÙØ±Ø¹ ${index + 1} ØºÙŠØ± ØµØ­ÙŠØ­ (ÙŠØ¬Ø¨ Ø£Ù† ÙŠÙƒÙˆÙ† Ø±Ù‚Ù… Ø£Ø±Ø¯Ù†ÙŠ ØµØ­ÙŠØ­ Ù…Ø«Ù„ 077XXXXXXX Ø£Ùˆ 064291511)`;
         }
       });
     }
@@ -253,26 +267,24 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
     return {
       name: trimmedName,
-      main_phone: data.mainPhone?.trim() || '',
+      mainPhone: data.mainPhone?.trim() || '',
       email: data.email?.trim() || undefined,
-      main_address: {
-        street: data.mainAddress?.street?.trim() || '',
-        city: data.mainAddress?.city?.trim() || '',
-        governorate: data.mainAddress?.governorate || '',
-        postalCode: data.mainAddress?.postalCode?.trim() || '',
-      },
-      age_range: {
-        minAge: Number.isInteger(data.ageRange?.minAge) ? data.ageRange.minAge : 70,
-        maxAge: Number.isInteger(data.ageRange?.maxAge) ? data.ageRange.maxAge : 52,
-      },
+      governorateId: data.mainAddress?.governorate || undefined,
+      governorate: data.mainAddress?.governorate || '',
+      city: data.mainAddress?.city?.trim() || '',
+      postalCode: data.mainAddress?.postalCode?.trim() || '',
+      addressLine: data.mainAddress?.street?.trim() || '',
+      minAgeDays: Number.isInteger(data.ageRange?.minAge) ? data.ageRange.minAge : 70,
+      maxAgeMonths: Number.isInteger(data.ageRange?.maxAge) ? data.ageRange.maxAge : 52,
       notes: data.notes?.trim() || undefined,
-      has_branches: hasBranchEntries,
+      hasBranches: hasBranchEntries,
+      numberOfBranches: hasBranchEntries ? data.branches.length : 0,
       branches: hasBranchEntries
         ? data.branches.map((branch) => {
             const branchPhone = branch.phone?.trim() || '';
             return {
               ...(branch.id ? { id: branch.id } : {}),
-              name: trimmedName,
+              name: branch.name || trimmedName,
               phone: branchPhone || undefined,
               address: {
                 street: branch.address?.street?.trim() || '',
@@ -283,6 +295,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
             };
           })
         : [],
+      branchManagersEnabled: branchManagersEnabled
     };
   };
 
@@ -392,15 +405,15 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
         return (
           <div className="space-y-6">
             <div className="text-center">
-              <h4 className="text-lg font-medium text-slate-800">معلومات الحضانة الأساسية</h4>
-              <p className="mt-1 text-sm text-slate-600">أدخل المعلومات الأساسية للحضانة الجديدة</p>
+              <h4 className="text-lg font-medium text-slate-800">Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ø­Ø¶Ø§Ù†Ø© Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ©</h4>
+              <p className="mt-1 text-sm text-slate-600">Ø£Ø¯Ø®Ù„ Ø§Ù„Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ø£Ø³Ø§Ø³ÙŠØ© Ù„Ù„Ø­Ø¶Ø§Ù†Ø© Ø§Ù„Ø¬Ø¯ÙŠØ¯Ø©</p>
             </div>
 
             {/* Basic Information */}
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label htmlFor="nursery-name" className="block text-sm font-medium text-slate-700">
-                  اسم الحضانة *
+                  Ø§Ø³Ù… Ø§Ù„Ø­Ø¶Ø§Ù†Ø© *
                 </label>
                 <input
                   id="nursery-name"
@@ -422,7 +435,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
               </div>
               <div>
                 <label htmlFor="main-phone" className="block text-sm font-medium text-slate-700">
-                  رقم الهاتف الرئيسي *
+                  Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ *
                 </label>
                 <input
                   id="main-phone"
@@ -447,7 +460,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
             <div>
               <label htmlFor="nursery-email" className="block text-sm font-medium text-slate-700">
-                البريد الإلكتروني (اختياري)
+                Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ (Ø§Ø®ØªÙŠØ§Ø±ÙŠ)
               </label>
               <input
                 id="nursery-email"
@@ -470,10 +483,10 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
             {/* Main Address */}
             <div className="rounded-lg border border-slate-200 p-4">
-              <h4 className="mb-3 font-medium text-slate-800">العنوان الرئيسي</h4>
+              <h4 className="mb-3 font-medium text-slate-800">Ø§Ù„Ø¹Ù†ÙˆØ§Ù† Ø§Ù„Ø±Ø¦ÙŠØ³ÙŠ</h4>
               <div className="grid gap-4 md:grid-cols-2">
                 <div>
-                  <label htmlFor="main-street" className="block text-sm font-medium text-slate-700">الشارع</label>
+                  <label htmlFor="main-street" className="block text-sm font-medium text-slate-700">Ø§Ù„Ø´Ø§Ø±Ø¹</label>
                   <input
                     id="main-street"
                     name="mainStreet"
@@ -485,7 +498,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                   />
                 </div>
                 <div>
-                  <label htmlFor="main-city" className="block text-sm font-medium text-slate-700">المدينة</label>
+                  <label htmlFor="main-city" className="block text-sm font-medium text-slate-700">Ø§Ù„Ù…Ø¯ÙŠÙ†Ø©</label>
                   <input
                     id="main-city"
                     name="mainCity"
@@ -497,7 +510,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                   />
                 </div>
                 <div>
-                  <label htmlFor="main-governorate" className="block text-sm font-medium text-slate-700">المحافظة</label>
+                  <label htmlFor="main-governorate" className="block text-sm font-medium text-slate-700">Ø§Ù„Ù…Ø­Ø§ÙØ¸Ø©</label>
                   <select
                     id="main-governorate"
                     name="mainGovernorate"
@@ -506,14 +519,14 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none"
                     autoComplete="address-level1"
                   >
-                    <option value="">اختر المحافظة</option>
+                    <option value="">Ø§Ø®ØªØ± Ø§Ù„Ù…Ø­Ø§ÙØ¸Ø©</option>
                     {JORDAN_GOVERNORATES.map(gov => (
                       <option key={gov} value={gov}>{GOVERNORATE_DISPLAY_NAMES[gov]}</option>
                     ))}
                   </select>
                 </div>
                 <div>
-                  <label htmlFor="main-postal-code" className="block text-sm font-medium text-slate-700">الرمز البريدي</label>
+                  <label htmlFor="main-postal-code" className="block text-sm font-medium text-slate-700">Ø§Ù„Ø±Ù…Ø² Ø§Ù„Ø¨Ø±ÙŠØ¯ÙŠ</label>
                   <input
                     id="main-postal-code"
                     name="mainPostalCode"
@@ -531,7 +544,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
             <div className="grid gap-4 md:grid-cols-2">
               <div>
                 <label htmlFor="min-age" className="block text-sm font-medium text-slate-700">
-                  الحد الأدنى للعمر (بالأيام)
+                  Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ Ù„Ù„Ø¹Ù…Ø± (Ø¨Ø§Ù„Ø£ÙŠØ§Ù…)
                 </label>
                 <input
                   id="min-age"
@@ -549,11 +562,11 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                   }`}
                 />
                 {errors.minAge && <p className="mt-1 text-sm text-red-600">{errors.minAge}</p>}
-                <p className="mt-1 text-xs text-slate-500">الافتراضي: 70 يوم</p>
+                <p className="mt-1 text-xs text-slate-500">Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ: 70 ÙŠÙˆÙ…</p>
               </div>
               <div>
                 <label htmlFor="max-age" className="block text-sm font-medium text-slate-700">
-                  الحد الأقصى للعمر (بالأشهر)
+                  Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„Ù„Ø¹Ù…Ø± (Ø¨Ø§Ù„Ø£Ø´Ù‡Ø±)
                 </label>
                 <input
                   id="max-age"
@@ -571,14 +584,14 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                   }`}
                 />
                 {errors.maxAge && <p className="mt-1 text-sm text-red-600">{errors.maxAge}</p>}
-                <p className="mt-1 text-xs text-slate-500">الافتراضي: 52 شهر</p>
+                <p className="mt-1 text-xs text-slate-500">Ø§Ù„Ø§ÙØªØ±Ø§Ø¶ÙŠ: 52 Ø´Ù‡Ø±</p>
               </div>
             </div>
 
             {/* Notes */}
             <div>
               <label htmlFor="nursery-notes" className="block text-sm font-medium text-slate-700">
-                ملاحظات خاصة
+                Ù…Ù„Ø§Ø­Ø¸Ø§Øª Ø®Ø§ØµØ©
               </label>
               <textarea
                 id="nursery-notes"
@@ -587,7 +600,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                 value={formData.notes}
                 onChange={(e) => handleInputChange('notes', e.target.value)}
                 className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none"
-                placeholder="أي ملاحظات إضافية عن الحضانة..."
+                placeholder="Ø£ÙŠ Ù…Ù„Ø§Ø­Ø¸Ø§Øª Ø¥Ø¶Ø§ÙÙŠØ© Ø¹Ù† Ø§Ù„Ø­Ø¶Ø§Ù†Ø©..."
               />
             </div>
           </div>
@@ -597,8 +610,8 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
         return (
           <div className="space-y-6">
             <div className="text-center">
-              <h4 className="text-lg font-medium text-slate-800">إعداد الأفرع</h4>
-              <p className="mt-1 text-sm text-slate-600">هل تريد إضافة أفرع لهذه الحضانة؟</p>
+              <h4 className="text-lg font-medium text-slate-800">Ø¥Ø¹Ø¯Ø§Ø¯ Ø§Ù„Ø£ÙØ±Ø¹</h4>
+              <p className="mt-1 text-sm text-slate-600">Ù‡Ù„ ØªØ±ÙŠØ¯ Ø¥Ø¶Ø§ÙØ© Ø£ÙØ±Ø¹ Ù„Ù‡Ø°Ù‡ Ø§Ù„Ø­Ø¶Ø§Ù†Ø©ØŸ</p>
             </div>
 
             <div className="mx-auto max-w-md space-y-6">
@@ -617,7 +630,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     className="h-4 w-4 text-primary-600 focus:ring-primary-500"
                   />
                   <label htmlFor="no-branches" className="text-sm font-medium text-slate-700">
-                    لا، الحضانة لها موقع واحد فقط
+                    Ù„Ø§ØŒ Ø§Ù„Ø­Ø¶Ø§Ù†Ø© Ù„Ù‡Ø§ Ù…ÙˆÙ‚Ø¹ ÙˆØ§Ø­Ø¯ ÙÙ‚Ø·
                   </label>
                 </div>
                 <div className="flex items-center space-x-4 rtl:space-x-reverse">
@@ -630,7 +643,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     className="h-4 w-4 text-primary-600 focus:ring-primary-500"
                   />
                   <label htmlFor="has-branches" className="text-sm font-medium text-slate-700">
-                    نعم، الحضانة لها عدة أفرع
+                    Ù†Ø¹Ù…ØŒ Ø§Ù„Ø­Ø¶Ø§Ù†Ø© Ù„Ù‡Ø§ Ø¹Ø¯Ø© Ø£ÙØ±Ø¹
                   </label>
                 </div>
               </div>
@@ -638,7 +651,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
               {hasBranches && (
                 <div className="rounded-lg border border-slate-200 p-4">
                   <label htmlFor="num-branches" className="block text-sm font-medium text-slate-700 mb-2">
-                    عدد الأفرع
+                    Ø¹Ø¯Ø¯ Ø§Ù„Ø£ÙØ±Ø¹
                   </label>
                   <select
                     id="num-branches"
@@ -647,9 +660,9 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     onChange={(e) => setNumBranches(parseInt(e.target.value))}
                     className="block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none"
                   >
-                    <option value={0}>اختر عدد الأفرع</option>
+                    <option value={0}>Ø§Ø®ØªØ± Ø¹Ø¯Ø¯ Ø§Ù„Ø£ÙØ±Ø¹</option>
                     {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10].map(num => (
-                      <option key={num} value={num}>{num} فرع{num > 1 ? '' : ''}</option>
+                      <option key={num} value={num}>{num} ÙØ±Ø¹{num > 1 ? '' : ''}</option>
                     ))}
                   </select>
                   {numBranches > 0 && (
@@ -658,7 +671,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                       onClick={addBranches}
                       className="mt-3 w-full rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
                     >
-                      إعداد نماذج الأفرع ({numBranches})
+                      Ø¥Ø¹Ø¯Ø§Ø¯ Ù†Ù…Ø§Ø°Ø¬ Ø§Ù„Ø£ÙØ±Ø¹ ({numBranches})
                     </button>
                   )}
                 </div>
@@ -672,10 +685,10 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
           <div className="space-y-6">
             <div className="text-center">
               <h4 className="text-lg font-medium text-slate-800">
-                {hasBranches ? 'معلومات الأفرع' : 'تأكيد البيانات'}
+                {hasBranches ? 'Ù…Ø¹Ù„ÙˆÙ…Ø§Øª Ø§Ù„Ø£ÙØ±Ø¹' : 'ØªØ£ÙƒÙŠØ¯ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª'}
               </h4>
               <p className="mt-1 text-sm text-slate-600">
-                {hasBranches ? 'أدخل معلومات كل فرع' : 'تأكد من صحة البيانات المدخلة'}
+                {hasBranches ? 'Ø£Ø¯Ø®Ù„ Ù…Ø¹Ù„ÙˆÙ…Ø§Øª ÙƒÙ„ ÙØ±Ø¹' : 'ØªØ£ÙƒØ¯ Ù…Ù† ØµØ­Ø© Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ù…Ø¯Ø®Ù„Ø©'}
               </p>
             </div>
 
@@ -683,13 +696,13 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
               <div className="space-y-6">
                 {formData.branches.map((branch, index) => (
                   <div key={index} className="rounded-lg border border-slate-200 p-4">
-                    <h5 className="mb-4 font-medium text-slate-800">الفرع {index + 1}</h5>
+                    <h5 className="mb-4 font-medium text-slate-800">Ø§Ù„ÙØ±Ø¹ {index + 1}</h5>
 
                     <div className="grid gap-4 md:grid-cols-2">
                     {!branchManagersEnabled ? (
                       <div>
                         <label htmlFor={`branch-name-${index}`} className="block text-sm font-medium text-slate-700">
-                          اسم الفرع *
+                          Ø§Ø³Ù… Ø§Ù„ÙØ±Ø¹ *
                         </label>
                         <input
                           id={`branch-name-${index}`}
@@ -709,12 +722,12 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                       </div>
                     ) : (
                       <div className="rounded-md border border-dashed border-slate-300 bg-slate-50 px-3 py-2 text-sm text-slate-600">
-                        سيتم استخدام اسم الحضانة <span className="font-medium text-slate-800">{formData.name || '...'}</span> لهذا الفرع تلقائياً.
+                        Ø³ÙŠØªÙ… Ø§Ø³ØªØ®Ø¯Ø§Ù… Ø§Ø³Ù… Ø§Ù„Ø­Ø¶Ø§Ù†Ø© <span className="font-medium text-slate-800">{formData.name || '...'}</span> Ù„Ù‡Ø°Ø§ Ø§Ù„ÙØ±Ø¹ ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹.
                       </div>
                     )}
                       <div>
                         <label htmlFor={`branch-phone-${index}`} className="block text-sm font-medium text-slate-700">
-                          رقم الهاتف
+                          Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ
                         </label>
                         <input
                           id={`branch-phone-${index}`}
@@ -736,7 +749,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
                     <div className="mt-4 grid gap-4 md:grid-cols-2">
                       <div>
-                        <label htmlFor={`branch-street-${index}`} className="block text-sm font-medium text-slate-700">الشارع</label>
+                        <label htmlFor={`branch-street-${index}`} className="block text-sm font-medium text-slate-700">Ø§Ù„Ø´Ø§Ø±Ø¹</label>
                         <input
                           id={`branch-street-${index}`}
                           name={`branchStreet-${index}`}
@@ -748,7 +761,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                         />
                       </div>
                       <div>
-                        <label htmlFor={`branch-city-${index}`} className="block text-sm font-medium text-slate-700">المدينة</label>
+                        <label htmlFor={`branch-city-${index}`} className="block text-sm font-medium text-slate-700">Ø§Ù„Ù…Ø¯ÙŠÙ†Ø©</label>
                         <input
                           id={`branch-city-${index}`}
                           name={`branchCity-${index}`}
@@ -760,7 +773,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                         />
                       </div>
                       <div>
-                        <label htmlFor={`branch-governorate-${index}`} className="block text-sm font-medium text-slate-700">المحافظة</label>
+                        <label htmlFor={`branch-governorate-${index}`} className="block text-sm font-medium text-slate-700">Ø§Ù„Ù…Ø­Ø§ÙØ¸Ø©</label>
                         <select
                           id={`branch-governorate-${index}`}
                           name={`branchGovernorate-${index}`}
@@ -769,7 +782,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                           className="mt-1 block w-full rounded-md border border-slate-300 px-3 py-2 focus:border-primary-500 focus:outline-none"
                           autoComplete="address-level1"
                         >
-                          <option value="">اختر المحافظة</option>
+                          <option value="">Ø§Ø®ØªØ± Ø§Ù„Ù…Ø­Ø§ÙØ¸Ø©</option>
                           {JORDAN_GOVERNORATES.map(gov => (
                             <option key={gov} value={gov}>{GOVERNORATE_DISPLAY_NAMES[gov]}</option>
                           ))}
@@ -777,7 +790,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                       </div>
                       {!branchManagersEnabled && (
                         <div>
-                          <label htmlFor={`branch-postal-${index}`} className="block text-sm font-medium text-slate-700">الرمز البريدي</label>
+                          <label htmlFor={`branch-postal-${index}`} className="block text-sm font-medium text-slate-700">Ø§Ù„Ø±Ù…Ø² Ø§Ù„Ø¨Ø±ÙŠØ¯ÙŠ</label>
                           <input
                             id={`branch-postal-${index}`}
                             name={`branchPostal-${index}`}
@@ -795,33 +808,33 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
               </div>
             ) : (
               <div className="rounded-lg border border-slate-200 p-6">
-                <h5 className="mb-4 text-lg font-medium text-slate-800">ملخص البيانات</h5>
+                <h5 className="mb-4 text-lg font-medium text-slate-800">Ù…Ù„Ø®Øµ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª</h5>
                 <div className="space-y-3 text-sm">
                   <div className="flex justify-between">
-                    <span className="text-slate-600">اسم الحضانة:</span>
+                    <span className="text-slate-600">Ø§Ø³Ù… Ø§Ù„Ø­Ø¶Ø§Ù†Ø©:</span>
                     <span className="font-medium text-slate-800">{formData.name}</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">رقم الهاتف:</span>
+                    <span className="text-slate-600">Ø±Ù‚Ù… Ø§Ù„Ù‡Ø§ØªÙ:</span>
                     <span className="font-medium text-slate-800">{formData.mainPhone}</span>
                   </div>
                   {formData.email && (
                     <div className="flex justify-between">
-                      <span className="text-slate-600">البريد الإلكتروني:</span>
+                      <span className="text-slate-600">Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ:</span>
                       <span className="font-medium text-slate-800">{formData.email}</span>
                     </div>
                   )}
                   <div className="flex justify-between">
-                    <span className="text-slate-600">الحد الأدنى للعمر:</span>
-                    <span className="font-medium text-slate-800">{formData.ageRange.minAge} يوم</span>
+                    <span className="text-slate-600">Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ø¯Ù†Ù‰ Ù„Ù„Ø¹Ù…Ø±:</span>
+                    <span className="font-medium text-slate-800">{formData.ageRange.minAge} ÙŠÙˆÙ…</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">الحد الأقصى للعمر:</span>
-                    <span className="font-medium text-slate-800">{formData.ageRange.maxAge} شهر</span>
+                    <span className="text-slate-600">Ø§Ù„Ø­Ø¯ Ø§Ù„Ø£Ù‚ØµÙ‰ Ù„Ù„Ø¹Ù…Ø±:</span>
+                    <span className="font-medium text-slate-800">{formData.ageRange.maxAge} Ø´Ù‡Ø±</span>
                   </div>
                   <div className="flex justify-between">
-                    <span className="text-slate-600">الأفرع:</span>
-                    <span className="font-medium text-slate-800">لا توجد أفرع</span>
+                    <span className="text-slate-600">Ø§Ù„Ø£ÙØ±Ø¹:</span>
+                    <span className="font-medium text-slate-800">Ù„Ø§ ØªÙˆØ¬Ø¯ Ø£ÙØ±Ø¹</span>
                   </div>
                 </div>
               </div>
@@ -839,13 +852,13 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
       <div className="w-full max-w-4xl rounded-lg bg-white p-6 shadow-xl">
         <div className="mb-6 flex items-center justify-between">
           <h3 className="text-xl font-semibold text-slate-800">
-            {nursery ? 'تحديث بيانات الحضانة' : 'إضافة حضانة جديدة'}
+            {nursery ? 'ØªØ­Ø¯ÙŠØ« Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø­Ø¶Ø§Ù†Ø©' : 'Ø¥Ø¶Ø§ÙØ© Ø­Ø¶Ø§Ù†Ø© Ø¬Ø¯ÙŠØ¯Ø©'}
           </h3>
           <button
             onClick={onClose}
             className="rounded-full p-2 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
           >
-            ✕
+            âœ•
           </button>
         </div>
 
@@ -862,7 +875,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
               disabled={currentStep === 1}
               className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50 disabled:opacity-50 disabled:cursor-not-allowed"
             >
-              السابق
+              Ø§Ù„Ø³Ø§Ø¨Ù‚
             </button>
             <div className="flex gap-3">
               <button
@@ -870,7 +883,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                 onClick={onClose}
                 className="rounded-md border border-slate-300 px-4 py-2 text-sm font-medium text-slate-700 hover:bg-slate-50"
               >
-                إلغاء
+                Ø¥Ù„ØºØ§Ø¡
               </button>
               {currentStep < 3 ? (
                 <button
@@ -878,7 +891,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                   onClick={nextStep}
                   className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
                 >
-                  التالي
+                  Ø§Ù„ØªØ§Ù„ÙŠ
                 </button>
               ) : (
                 <button
@@ -886,7 +899,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                   disabled={mutation.isPending}
                   className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700 disabled:opacity-50"
                 >
-                  {mutation.isPending ? 'جاري الحفظ...' : nursery ? 'تحديث' : 'إضافة الحضانة'}
+                  {mutation.isPending ? 'Ø¬Ø§Ø±ÙŠ Ø§Ù„Ø­ÙØ¸...' : nursery ? 'ØªØ­Ø¯ÙŠØ«' : 'Ø¥Ø¶Ø§ÙØ© Ø§Ù„Ø­Ø¶Ø§Ù†Ø©'}
                 </button>
               )}
             </div>
@@ -905,22 +918,22 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                   </svg>
                 </div>
-                <h3 className="mt-4 text-lg font-medium text-slate-800">تم إنشاء الحضانة بنجاح!</h3>
+                <h3 className="mt-4 text-lg font-medium text-slate-800">ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø­Ø¶Ø§Ù†Ø© Ø¨Ù†Ø¬Ø§Ø­!</h3>
                 <p className="mt-2 text-sm text-slate-600">
-                  تم إنشاء {managerCredentials.length} حساب مدير للحضانة والأفرع المتعلقة بها. يرجى حفظ بيانات الدخول التالية:
+                  ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ {managerCredentials.length} Ø­Ø³Ø§Ø¨ Ù…Ø¯ÙŠØ± Ù„Ù„Ø­Ø¶Ø§Ù†Ø© ÙˆØ§Ù„Ø£ÙØ±Ø¹ Ø§Ù„Ù…ØªØ¹Ù„Ù‚Ø© Ø¨Ù‡Ø§. ÙŠØ±Ø¬Ù‰ Ø­ÙØ¸ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø§Ù„ØªØ§Ù„ÙŠØ©:
                 </p>
               </div>
 
               <div className="mt-6 flex items-center justify-between gap-4">
                 <span className="text-sm text-slate-500">
-                  يمكنك نسخ جميع بيانات الدخول أو نسخ كل حساب بشكل منفصل.
+                  ÙŠÙ…ÙƒÙ†Ùƒ Ù†Ø³Ø® Ø¬Ù…ÙŠØ¹ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø£Ùˆ Ù†Ø³Ø® ÙƒÙ„ Ø­Ø³Ø§Ø¨ Ø¨Ø´ÙƒÙ„ Ù…Ù†ÙØµÙ„.
                 </span>
                 <button
                   type="button"
                   onClick={handleCopyAllCredentials}
                   className="rounded-md bg-primary-50 px-4 py-2 text-sm font-medium text-primary-700 hover:bg-primary-100"
                 >
-                  نسخ جميع البيانات
+                  Ù†Ø³Ø® Ø¬Ù…ÙŠØ¹ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª
                 </button>
               </div>
 
@@ -930,9 +943,9 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     <div className="flex items-center justify-between">
                       <div>
                         <h4 className="text-sm font-semibold text-slate-800">
-                          {manager.scope || (manager.branchName ? `فرع: ${manager.branchName}` : 'الإدارة العامة للحضانة')}
+                          {manager.scope || (manager.branchName ? `ÙØ±Ø¹: ${manager.branchName}` : 'Ø§Ù„Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø¹Ø§Ù…Ø© Ù„Ù„Ø­Ø¶Ø§Ù†Ø©')}
                         </h4>
-                        <p className="text-xs text-slate-500">استخدم البيانات التالية لتفعيل الحساب في أول تسجيل دخول.</p>
+                        <p className="text-xs text-slate-500">Ø§Ø³ØªØ®Ø¯Ù… Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„ØªØ§Ù„ÙŠØ© Ù„ØªÙØ¹ÙŠÙ„ Ø§Ù„Ø­Ø³Ø§Ø¨ ÙÙŠ Ø£ÙˆÙ„ ØªØ³Ø¬ÙŠÙ„ Ø¯Ø®ÙˆÙ„.</p>
                       </div>
                       <span className="rounded-full bg-primary-100 px-2 py-1 text-xs font-medium text-primary-700">
                         {index + 1} / {managerCredentials.length}
@@ -941,13 +954,13 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
 
                     <div className="mt-4 grid gap-4 md:grid-cols-3">
                       <div className="md:col-span-1">
-                        <label className="block text-sm font-medium text-slate-700">النطاق</label>
+                        <label className="block text-sm font-medium text-slate-700">Ø§Ù„Ù†Ø·Ø§Ù‚</label>
                         <div className="mt-1 rounded-md border border-slate-300 bg-white px-3 py-2 text-sm">
                           {manager.scope || (manager.branchName ? `Branch ${index}` : 'Main')}
                         </div>
                       </div>
                       <div className="md:col-span-1">
-                        <label className="block text-sm font-medium text-slate-700">البريد الإلكتروني</label>
+                        <label className="block text-sm font-medium text-slate-700">Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ</label>
                         <div className="mt-1 flex items-center gap-2">
                           <input
                             type="text"
@@ -958,14 +971,14 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                           <button
                             onClick={() => navigator.clipboard.writeText(manager.email)}
                             className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
-                            title="نسخ البريد الإلكتروني"
+                            title="Ù†Ø³Ø® Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ"
                           >
-                            📋
+                            ðŸ“‹
                           </button>
                         </div>
                       </div>
                       <div className="md:col-span-1">
-                        <label className="block text-sm font-medium text-slate-700">كلمة المرور المؤقتة</label>
+                        <label className="block text-sm font-medium text-slate-700">ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ù…Ø¤Ù‚ØªØ©</label>
                         <div className="mt-1 flex items-center gap-2">
                           <input
                             type="text"
@@ -976,9 +989,9 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                           <button
                             onClick={() => navigator.clipboard.writeText(manager.temporaryPassword || manager.tempPassword || '')}
                             className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
-                            title="نسخ كلمة المرور"
+                            title="Ù†Ø³Ø® ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ±"
                           >
-                            📋
+                            ðŸ“‹
                           </button>
                         </div>
                       </div>
@@ -997,7 +1010,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                   }}
                   className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
                 >
-                  تم الفهم
+                  ØªÙ… Ø§Ù„ÙÙ‡Ù…
                 </button>
               </div>
             </div>
@@ -1012,14 +1025,14 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                       <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 13l4 4L19 7" />
                     </svg>
                   </div>
-                  <h3 className="mt-4 text-lg font-medium text-slate-800">تم إنشاء الحضانة بنجاح!</h3>
-                  <p className="mt-2 text-sm text-slate-600">تم إنشاء حساب مدير تلقائياً لهذه الحضانة. يرجى حفظ بيانات الدخول التالية:</p>
+                  <h3 className="mt-4 text-lg font-medium text-slate-800">ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø§Ù„Ø­Ø¶Ø§Ù†Ø© Ø¨Ù†Ø¬Ø§Ø­!</h3>
+                  <p className="mt-2 text-sm text-slate-600">ØªÙ… Ø¥Ù†Ø´Ø§Ø¡ Ø­Ø³Ø§Ø¨ Ù…Ø¯ÙŠØ± ØªÙ„Ù‚Ø§Ø¦ÙŠØ§Ù‹ Ù„Ù‡Ø°Ù‡ Ø§Ù„Ø­Ø¶Ø§Ù†Ø©. ÙŠØ±Ø¬Ù‰ Ø­ÙØ¸ Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø¯Ø®ÙˆÙ„ Ø§Ù„ØªØ§Ù„ÙŠØ©:</p>
                 </div>
 
                 <div className="mt-6 rounded-lg bg-slate-50 p-4">
                   <div className="space-y-3">
                     <div>
-                      <label className="block text-sm font-medium text-slate-700">اسم المستخدم</label>
+                      <label className="block text-sm font-medium text-slate-700">Ø§Ø³Ù… Ø§Ù„Ù…Ø³ØªØ®Ø¯Ù…</label>
                       <div className="mt-1 flex items-center gap-2">
                         <input
                           type="text"
@@ -1030,14 +1043,14 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                         <button
                           onClick={() => navigator.clipboard.writeText(primaryManager.username || primaryManager.email)}
                           className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
-                          title="نسخ"
+                          title="Ù†Ø³Ø®"
                         >
-                          📋
+                          ðŸ“‹
                         </button>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700">كلمة المرور المؤقتة</label>
+                      <label className="block text-sm font-medium text-slate-700">ÙƒÙ„Ù…Ø© Ø§Ù„Ù…Ø±ÙˆØ± Ø§Ù„Ù…Ø¤Ù‚ØªØ©</label>
                       <div className="mt-1 flex items-center gap-2">
                         <input
                           type="password"
@@ -1048,14 +1061,14 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                         <button
                           onClick={() => navigator.clipboard.writeText(primaryManager.temporaryPassword || primaryManager.tempPassword || '')}
                           className="rounded-md bg-slate-200 px-2 py-1 text-xs hover:bg-slate-300"
-                          title="نسخ"
+                          title="Ù†Ø³Ø®"
                         >
-                          📋
+                          ðŸ“‹
                         </button>
                       </div>
                     </div>
                     <div>
-                      <label className="block text-sm font-medium text-slate-700">الاسم الكامل</label>
+                      <label className="block text-sm font-medium text-slate-700">Ø§Ù„Ø§Ø³Ù… Ø§Ù„ÙƒØ§Ù…Ù„</label>
                       <input
                         type="text"
                         readOnly
@@ -1065,7 +1078,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     </div>
                     {primaryManager.email && (
                       <div>
-                        <label className="block text-sm font-medium text-slate-700">البريد الإلكتروني</label>
+                        <label className="block text-sm font-medium text-slate-700">Ø§Ù„Ø¨Ø±ÙŠØ¯ Ø§Ù„Ø¥Ù„ÙƒØªØ±ÙˆÙ†ÙŠ</label>
                         <input
                           type="email"
                           readOnly
@@ -1087,7 +1100,7 @@ function NurseryForm({ nursery, onClose, onSuccess }) {
                     }}
                     className="rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
                   >
-                    تم الفهم
+                    ØªÙ… Ø§Ù„ÙÙ‡Ù…
                   </button>
                 </div>
               </div>
@@ -1107,7 +1120,7 @@ export default function NurseryManagement() {
   const { data: rawNurseryData, isLoading, isError, error } = useQuery({
     queryKey: ['nurseries'],
     queryFn: async () => {
-      const response = await apiClient.get('/admin/nurseries');
+      const response = await apiClient.get(getEndpoint('/admin/nurseries'));
       return response.data;
     },
   });
@@ -1123,7 +1136,7 @@ export default function NurseryManagement() {
 
   const deleteMutation = useMutation({
     mutationFn: async (nurseryId) => {
-      return apiClient.delete(`/admin/nurseries/${nurseryId}`);
+      return apiClient.delete(getEndpoint(`/admin/nurseries/${nurseryId}`));
     },
     onSuccess: () => {
       queryClient.invalidateQueries(['nurseries']);
@@ -1136,11 +1149,11 @@ export default function NurseryManagement() {
   };
 
   const handleDelete = async (nurseryId) => {
-    if (window.confirm('هل أنت متأكد من حذف هذه الحضانة؟')) {
+    if (window.confirm('Ù‡Ù„ Ø£Ù†Øª Ù…ØªØ£ÙƒØ¯ Ù…Ù† Ø­Ø°Ù Ù‡Ø°Ù‡ Ø§Ù„Ø­Ø¶Ø§Ù†Ø©ØŸ')) {
       try {
         await deleteMutation.mutateAsync(nurseryId);
       } catch (error) {
-        alert('حدث خطأ أثناء حذف الحضانة');
+        alert('Ø­Ø¯Ø« Ø®Ø·Ø£ Ø£Ø«Ù†Ø§Ø¡ Ø­Ø°Ù Ø§Ù„Ø­Ø¶Ø§Ù†Ø©');
       }
     }
   };
@@ -1149,8 +1162,8 @@ export default function NurseryManagement() {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-2xl font-semibold text-slate-800">إدارة الحضانات</h2>
-          <p className="mt-1 text-sm text-slate-500">إدارة بيانات الحضانات والأفرع</p>
+          <h2 className="text-2xl font-semibold text-slate-800">Ø¥Ø¯Ø§Ø±Ø© Ø§Ù„Ø­Ø¶Ø§Ù†Ø§Øª</h2>
+          <p className="mt-1 text-sm text-slate-500">Ø¥Ø¯Ø§Ø±Ø© Ø¨ÙŠØ§Ù†Ø§Øª Ø§Ù„Ø­Ø¶Ø§Ù†Ø§Øª ÙˆØ§Ù„Ø£ÙØ±Ø¹</p>
         </div>
         <button
           onClick={() => {
@@ -1160,12 +1173,12 @@ export default function NurseryManagement() {
           className="flex items-center gap-2 rounded-md bg-primary-600 px-4 py-2 text-sm font-medium text-white hover:bg-primary-700"
         >
           <PlusIcon className="h-4 w-4" />
-          إضافة حضانة جديدة
+          إضافة حضانة
         </button>
       </div>
 
       {isLoading && (
-        <div className="card text-center text-sm text-slate-500">جاري تحميل البيانات...</div>
+        <div className="card text-center text-sm text-slate-500">Ø¬Ø§Ø±ÙŠ ØªØ­Ù…ÙŠÙ„ Ø§Ù„Ø¨ÙŠØ§Ù†Ø§Øª...</div>
       )}
 
       {isError && (
@@ -1192,14 +1205,14 @@ export default function NurseryManagement() {
                   <button
                     onClick={() => handleEdit(nursery)}
                     className="rounded p-1 text-slate-400 hover:bg-slate-100 hover:text-slate-600"
-                    title="تحديث"
+                    title="ØªØ­Ø¯ÙŠØ«"
                   >
                     <PencilIcon className="h-4 w-4" />
                   </button>
                   <button
                     onClick={() => handleDelete(nursery.id)}
                     className="rounded p-1 text-red-400 hover:bg-red-100 hover:text-red-600"
-                    title="حذف"
+                    title="Ø­Ø°Ù"
                   >
                     <TrashIcon className="h-4 w-4" />
                   </button>
@@ -1208,41 +1221,41 @@ export default function NurseryManagement() {
 
               <div className="space-y-2 text-sm">
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-500">📍</span>
+                  <span className="text-slate-500">ðŸ“</span>
                   <span className="text-slate-600">
                     {nursery.mainCity}, {GOVERNORATE_DISPLAY_NAMES[nursery.mainGovernorate] || nursery.mainGovernorate}
                   </span>
                 </div>
                 {nursery.email && (
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">📧</span>
+                    <span className="text-slate-500">ðŸ“§</span>
                     <span className="text-slate-600">{nursery.email}</span>
                   </div>
                 )}
                 {nursery.minAgeDays && nursery.maxAgeMonths && (
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">👶</span>
+                    <span className="text-slate-500">ðŸ‘¶</span>
                     <span className="text-slate-600">
-                      من {nursery.minAgeDays} يوم إلى {nursery.maxAgeMonths} شهر
+                      Ù…Ù† {nursery.minAgeDays} ÙŠÙˆÙ… Ø¥Ù„Ù‰ {nursery.maxAgeMonths} Ø´Ù‡Ø±
                     </span>
                   </div>
                 )}
                 {nursery.branches?.length > 0 && (
                   <div className="flex items-center gap-2">
-                    <span className="text-slate-500">🏢</span>
-                    <span className="text-slate-600">{nursery.branches.length} فرع</span>
+                    <span className="text-slate-500">ðŸ¢</span>
+                    <span className="text-slate-600">{nursery.branches.length} ÙØ±Ø¹</span>
                   </div>
                 )}
                 {nursery.branches?.length > 0 && (
                   <div className="mt-3 space-y-2">
-                    <h4 className="text-sm font-medium text-slate-700">الأفرع:</h4>
+                    <h4 className="text-sm font-medium text-slate-700">Ø§Ù„Ø£ÙØ±Ø¹:</h4>
                     {nursery.branches.map((branch, index) => (
                       <div key={index} className="rounded-md bg-slate-50 p-2 text-xs">
                         <div className="font-medium text-slate-700">{branch.name}</div>
                         <div className="text-slate-600">
-                          📍 {branch.address?.street}, {branch.address?.city}, {GOVERNORATE_DISPLAY_NAMES[branch.address?.governorate] || branch.address?.governorate}
+                          ðŸ“ {branch.address?.street}, {branch.address?.city}, {GOVERNORATE_DISPLAY_NAMES[branch.address?.governorate] || branch.address?.governorate}
                         </div>
-                        <div className="text-slate-600">📞 {branch.phone}</div>
+                        <div className="text-slate-600">ðŸ“ž {branch.phone}</div>
                       </div>
                     ))}
                   </div>
@@ -1261,10 +1274,10 @@ export default function NurseryManagement() {
                     ? 'bg-green-100 text-green-800'
                     : 'bg-red-100 text-red-800'
                 }`}>
-                  {nursery.isActive ? 'فعالة' : 'غير فعالة'}
+                  {nursery.isActive ? 'ÙØ¹Ø§Ù„Ø©' : 'ØºÙŠØ± ÙØ¹Ø§Ù„Ø©'}
                 </span>
                 <span className="text-xs text-slate-500">
-                  تم الإنشاء: {new Date(nursery.createdAt).toLocaleDateString('ar-JO')}
+                  ØªÙ… Ø§Ù„Ø¥Ù†Ø´Ø§Ø¡: {new Date(nursery.createdAt).toLocaleDateString('ar-JO')}
                 </span>
               </div>
             </div>
@@ -1273,16 +1286,25 @@ export default function NurseryManagement() {
       )}
 
       {showForm && (
-        <NurseryForm
-          nursery={editingNursery}
-          onClose={() => {
-            setShowForm(false);
-            setEditingNursery(null);
-          }}
-          onSuccess={() => {
-            // Success handled by mutation
-          }}
-        />
+        editingNursery ? (
+          <NurseryForm
+            nursery={editingNursery}
+            onClose={() => {
+              setShowForm(false);
+              setEditingNursery(null);
+            }}
+            onSuccess={() => {
+              // Success handled by mutation
+            }}
+          />
+        ) : (
+          <CreateNurseryFlow
+            onClose={() => {
+              setShowForm(false);
+              setEditingNursery(null);
+            }}
+          />
+        )
       )}
     </div>
   );

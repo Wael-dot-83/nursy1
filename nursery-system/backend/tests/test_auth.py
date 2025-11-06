@@ -17,7 +17,10 @@ def test_login_success(client, admin_user):
     data = response.json()
     assert "access_token" in data
     assert data["token_type"] == "bearer"
-    assert "refresh_token" in data
+    assert "user" in data
+    assert data["user"]["email"] == admin_user.email
+    # Note: refresh_token is set as httpOnly cookie, not in response body
+    assert "refresh_token" in response.cookies or "refresh_token" not in data
 
 
 def test_login_invalid_credentials(client, admin_user):

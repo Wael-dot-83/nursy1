@@ -1,0 +1,54 @@
+# Multi-stage build for optimized production image
+FROM python:3.11-slim as builder
+
+WORKDIR /build
+
+# Install build dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    gcc \
+    postgresql-client \
+    && rm -rf /var/lib/apt/lists/*
+
+# Copy requirements and install dependencies
+COPY requirements.txt .
+RUN pip install --no-cache-dir --user -r requirements.txt
+
+# Production stage
+FROM python:3.11-slim
+
+WORKDIR /app
+
+# Install runtime dependencies
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    postgresql-client \
+    curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root user first
+RUN useradd -m -u 1000 nursery
+
+# Copy Python dependencies from builder to user's local directory
+COPY --from=builder /root/.local /home/nursery/.local
+
+# Copy application code
+COPY --chown=nursery:nursery . .
+
+# Create required directories
+RUN mkdir -p /app/uploads /app/logs && \
+    chown -R nursery:nursery /app/uploads /app/logs
+
+# Set PATH to include user's local bin
+ENV PATH=/home/nursery/.local/bin:$PATH
+
+# Switch to non-root user
+USER nursery
+
+# Expose port
+EXPOSE 8002
+
+# Health check
+HEALTHCHECK --interval=30s --timeout=10s --start-period=40s --retries=3 \
+    CMD curl -f http://localhost:8002/health || exit 1
+
+# Run with Uvicorn
+CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8002", "--workers", "4", "--log-level", "info"]

@@ -3,8 +3,8 @@ from typing import Optional
 import secrets
 import string
 from sqlalchemy.orm import Session
-from .models import User, OTPRequest, RefreshToken
-from .security import hash_password, verify_password, create_access_token, create_refresh_token, hash_otp_code, verify_otp_code
+from .models import User, RefreshToken  # OTPRequest removed - OTP feature deprecated
+from .security import hash_password, verify_password, create_access_token, create_refresh_token  # hash_otp_code, verify_otp_code removed
 from .settings import settings
 
 class AuthService:
@@ -16,61 +16,62 @@ class AuthService:
             return None
         return user
 
-    @staticmethod
-    def generate_otp() -> str:
-        """Generate a 6-digit OTP"""
-        return ''.join(secrets.choice(string.digits) for _ in range(6))
-
-    @staticmethod
-    def create_otp_request(db: Session, email: str) -> OTPRequest:
-        """Create OTP request for user"""
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            raise ValueError("User not found")
-
-        # Generate OTP
-        otp_code = AuthService.generate_otp()
-        hashed_otp = hash_otp_code(otp_code)
-
-        # Create OTP request
-        otp_request = OTPRequest(
-            user_id=user.id,
-            otp_code_hash=hashed_otp,
-            expires_at=datetime.now(timezone.utc) + timedelta(minutes=settings.otp_expire_minutes)
-        )
-
-        db.add(otp_request)
-        db.commit()
-        db.refresh(otp_request)
-
-        # In a real application, you would send the OTP via SMS/email
-        # For demo purposes, we'll return it
-        otp_request.plain_otp = otp_code  # This would not be stored in production
-
-        return otp_request
-
-    @staticmethod
-    def verify_otp(db: Session, email: str, otp_code: str) -> Optional[User]:
-        """Verify OTP and return user if valid"""
-        user = db.query(User).filter(User.email == email).first()
-        if not user:
-            return None
-
-        # Find valid OTP request
-        otp_request = db.query(OTPRequest).filter(
-            OTPRequest.user_id == user.id,
-            OTPRequest.used == False,
-            OTPRequest.expires_at > datetime.now(timezone.utc)
-        ).order_by(OTPRequest.created_at.desc()).first()
-
-        if not otp_request or not verify_otp_code(otp_code, otp_request.otp_code_hash):
-            return None
-
-        # Mark OTP as used
-        otp_request.used = True
-        db.commit()
-
-        return user
+    # DEPRECATED: OTP authentication feature removed
+    # @staticmethod
+    # def generate_otp() -> str:
+    #     """Generate a 6-digit OTP"""
+    #     return ''.join(secrets.choice(string.digits) for _ in range(6))
+    #
+    # @staticmethod
+    # def create_otp_request(db: Session, email: str) -> OTPRequest:
+    #     """Create OTP request for user"""
+    #     user = db.query(User).filter(User.email == email).first()
+    #     if not user:
+    #         raise ValueError("User not found")
+    #
+    #     # Generate OTP
+    #     otp_code = AuthService.generate_otp()
+    #     hashed_otp = hash_otp_code(otp_code)
+    #
+    #     # Create OTP request
+    #     otp_request = OTPRequest(
+    #         user_id=user.id,
+    #         otp_code_hash=hashed_otp,
+    #         expires_at=datetime.now(timezone.utc) + timedelta(minutes=settings.otp_expire_minutes)
+    #     )
+    #
+    #     db.add(otp_request)
+    #     db.commit()
+    #     db.refresh(otp_request)
+    #
+    #     # In a real application, you would send the OTP via SMS/email
+    #     # For demo purposes, we'll return it
+    #     otp_request.plain_otp = otp_code  # This would not be stored in production
+    #
+    #     return otp_request
+    #
+    # @staticmethod
+    # def verify_otp(db: Session, email: str, otp_code: str) -> Optional[User]:
+    #     """Verify OTP and return user if valid"""
+    #     user = db.query(User).filter(User.email == email).first()
+    #     if not user:
+    #         return None
+    #
+    #     # Find valid OTP request
+    #     otp_request = db.query(OTPRequest).filter(
+    #         OTPRequest.user_id == user.id,
+    #         OTPRequest.used == False,
+    #         OTPRequest.expires_at > datetime.now(timezone.utc)
+    #     ).order_by(OTPRequest.created_at.desc()).first()
+    #
+    #     if not otp_request or not verify_otp_code(otp_code, otp_request.otp_code_hash):
+    #         return None
+    #
+    #     # Mark OTP as used
+    #     otp_request.used = True
+    #     db.commit()
+    #
+    #     return user
 
     @staticmethod
     def create_tokens(db: Session, user: User) -> tuple[str, str]:
@@ -144,9 +145,10 @@ class AuthService:
     @staticmethod
     def cleanup_expired_tokens(db: Session):
         """Clean up expired tokens (can be run as a background task)"""
-        expired_otp = db.query(OTPRequest).filter(
-            OTPRequest.expires_at < datetime.now(timezone.utc)
-        ).delete()
+        # OTP cleanup removed - OTP feature deprecated
+        # expired_otp = db.query(OTPRequest).filter(
+        #     OTPRequest.expires_at < datetime.now(timezone.utc)
+        # ).delete()
 
         expired_refresh = db.query(RefreshToken).filter(
             RefreshToken.expires_at < datetime.now(timezone.utc)
@@ -154,4 +156,4 @@ class AuthService:
 
         db.commit()
 
-        return expired_otp + expired_refresh
+        return expired_refresh  # Previously: expired_otp + expired_refresh

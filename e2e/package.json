@@ -1,0 +1,26 @@
+{
+  "name": "nursery-e2e-tests",
+  "version": "1.0.0",
+  "description": "End-to-end tests for Nursery Management System",
+  "type": "module",
+  "scripts": {
+    "test": "playwright test",
+    "test:headed": "playwright test --headed",
+    "test:ui": "playwright test --ui",
+    "test:debug": "playwright test --debug",
+    "test:chromium": "playwright test --project=chromium",
+    "test:firefox": "playwright test --project=firefox",
+    "test:webkit": "playwright test --project=webkit",
+    "test:report": "playwright show-report playwright-report",
+    "install": "playwright install --with-deps"
+  },
+  "keywords": [
+    "e2e",
+    "playwright",
+    "testing",
+    "nursery"
+  ],
+  "devDependencies": {
+    "@playwright/test": "^1.41.0"
+  }
+}

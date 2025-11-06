@@ -324,7 +324,7 @@ export default function ChildGuardianModal({ open, onClose, onSuccess }) {
         photoUrlOverride: photoUrl,
       });
 
-      await apiClient.post('/manager/enrollments', payload);
+      await apiClient.post('/api/manager/enrollments', payload);
 
       toast.success('?? ????? ?????.');
       if (onSuccess) {
@@ -554,7 +554,7 @@ export default function ChildGuardianModal({ open, onClose, onSuccess }) {
                                   <label htmlFor="child-photo-upload" className="cursor-pointer font-medium">
                                     ???? ?????? ??? ?? ???? ????????
                                   </label>
-                                  <p className="text-xs text-slate-500">??????? ??????? ???: PNG, JPG — ???? ?????? 3MB</p>
+                                  <p className="text-xs text-slate-500">??????? ??????? ???: PNG, JPG ï¿½ ???? ?????? 3MB</p>
                                   {childForm.photoFile && (
                                     <div className="mt-2 flex items-center justify-between rounded-xl bg-slate-100 px-4 py-2 text-right text-sm text-slate-700">
                                       <span className="truncate">{childForm.photoFile.name}</span>
@@ -746,7 +746,7 @@ export default function ChildGuardianModal({ open, onClose, onSuccess }) {
                     <div className="grid gap-4 md:grid-cols-2">
                       <DocumentUploader
                         label="????? ???????"
-                        description="PDF, PNG, JPG — ??? 5MB"
+                        description="PDF, PNG, JPG ï¿½ ??? 5MB"
                         documentKey="birthCertificate"
                         documentState={documents.birthCertificate}
                         onDrop={event => handleDocumentDrop('birthCertificate', event)}
@@ -756,7 +756,7 @@ export default function ChildGuardianModal({ open, onClose, onSuccess }) {
                       />
                       <DocumentUploader
                         label="????? ??????? ??????"
-                        description="PDF, PNG, JPG — ??? 5MB"
+                        description="PDF, PNG, JPG ï¿½ ??? 5MB"
                         documentKey="medicalClearance"
                         documentState={documents.medicalClearance}
                         onDrop={event => handleDocumentDrop('medicalClearance', event)}

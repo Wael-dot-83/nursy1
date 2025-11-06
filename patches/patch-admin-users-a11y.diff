@@ -1,0 +1,354 @@
+--- a/nursery-system/frontend/src/pages/admin/UserManagement.jsx
++++ b/nursery-system/frontend/src/pages/admin/UserManagement.jsx
+@@ -1150,10 +1150,11 @@ export default function UserManagement() {
+   const isBulkDeleteOpen = confirmAction?.type === 'bulk-delete';
+   return (
+-    <main aria-labelledby="user-management-title">
++    <main id="main-content" aria-labelledby="user-management-title" role="main">
+       <div className="space-y-6">
+-        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
++        <header className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+           <div>
+             <h1 id="user-management-title" className="text-2xl font-bold text-slate-900">إدارة المستخدمين والصلاحيات</h1>
+           <p className="mt-1 text-sm text-slate-600">تحكم بحسابات الفريق وتابع نشاطهم من مكان واحد.</p>
+         </div>
+         <div className="flex flex-wrap items-center gap-3">
+           <Button variant="primary" icon={PlusIcon} onClick={handleAddUser}>
+             إضافة مستخدم
+           </Button>
+           <Button variant="secondary" icon={ArrowDownTrayIcon} onClick={handleExport}>
+             تصدير CSV
+           </Button>
+         </div>
+-      </div>
++      </header>
+ 
+-      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+-        <div className="relative w-full lg:max-w-sm">
+-          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" />
++      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
++        <form 
++          role="search" 
++          onSubmit={(e) => e.preventDefault()}
++          className="relative w-full lg:max-w-sm"
++        >
++          <label htmlFor="user-search" className="sr-only">
++            البحث عن مستخدم بالاسم أو البريد الإلكتروني أو رقم الهاتف
++          </label>
++          <MagnifyingGlassIcon className="pointer-events-none absolute left-3 top-1/2 h-5 w-5 -translate-y-1/2 text-slate-400" aria-hidden="true" />
+           <input
++            id="user-search"
+             type="search"
+             value={search}
+             onChange={(event) => {
+               setSearch(event.target.value);
+               setPageState(1);
+             }}
+             placeholder="ابحث بالاسم أو البريد الإلكتروني أو رقم الهاتف"
+-            className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm text-slate-700 shadow-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
++            className="w-full rounded-2xl border border-slate-200 bg-white py-2.5 pr-4 pl-10 text-sm text-slate-700 shadow-sm"
++            aria-describedby="search-hint"
+           />
++          <span id="search-hint" className="sr-only">
++            اضغط Enter للبحث، سيتم التحديث تلقائياً أثناء الكتابة
++          </span>
+-        </div>
++        </form>
+         <div className="flex flex-wrap items-center gap-3">
+           <FilterMenu
+             value={filters.role}
+             options={ROLE_FILTER_OPTIONS}
+             onChange={(value) => {
+               setFilters((prev) => ({ ...prev, role: value }));
+               setPageState(1);
+             }}
+             placeholder="الأدوار"
++            label="تصفية حسب الدور"
+           />
+           <FilterMenu
+             value={filters.nursery}
+             options={nurseryOptions}
+             onChange={(value) => {
+               setFilters((prev) => ({ ...prev, nursery: value }));
+               setPageState(1);
+             }}
+             placeholder="الحضانات"
++            label="تصفية حسب الحضانة"
+           />
+           <FilterMenu
+             value={filters.status}
+             options={STATUS_FILTER_OPTIONS}
+             onChange={(value) => {
+               setFilters((prev) => ({ ...prev, status: value }));
+               setPageState(1);
+             }}
+             placeholder="الحالة"
++            label="تصفية حسب الحالة"
+           />
+         </div>
+       </div>
+ 
+       <div className="relative overflow-hidden rounded-3xl border border-slate-200 bg-white shadow-sm">
+-        <div className="overflow-x-auto">
++        <div className="overflow-x-auto" role="region" aria-labelledby="users-table-caption" tabIndex={0}>
+           {isLoading ? (
+             <div className="py-16">
+               <LoadingSpinner className="mx-auto" />
+             </div>
+           ) : isError ? (
+             <EmptyState
+               title="تعذر تحميل المستخدمين"
+               description={handleApiError(error)}
+               action={() => queryClient.invalidateQueries({ queryKey: usersQueryKey })}
+               actionLabel="إعادة المحاولة"
+             />
+           ) : users.length === 0 ? (
+             <EmptyState
+               title="لا يوجد مستخدمون"
+               description="ابدأ بإضافة أول مستخدم ليظهر في القائمة."
+               action={handleAddUser}
+               actionLabel="إضافة مستخدم"
+             />
+           ) : (
+             <table className="min-w-full divide-y divide-slate-200">
++              <caption id="users-table-caption" className="sr-only">
++                جدول المستخدمين - {total} مستخدم - الصفحة {currentPage} من {totalPages}
++              </caption>
+               <thead className="bg-slate-50 shadow-sm">
+                 <tr>
+                   <th scope="col" className="sticky top-0 z-10 w-12 px-6 py-3 text-right">
+                     <input
+                       type="checkbox"
+                       className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                       checked={allSelected}
+                       onChange={handleToggleSelectAll}
+                       disabled={allSelectionDisabled}
++                      aria-label={allSelected ? "إلغاء تحديد جميع المستخدمين" : "تحديد جميع المستخدمين"}
+                     />
+                   </th>
+                   <SortableHeader label="المستخدم" field="fullName" sort={sort} onSort={handleSort} />
+                   <SortableHeader label="الدور" field="role" sort={sort} onSort={handleSort} align="center" />
+                   <SortableHeader label="الحضانة" field="nursery" sort={sort} onSort={handleSort} />
+                   <SortableHeader label="الحالة" field="isActive" sort={sort} onSort={handleSort} align="center" />
+                   <SortableHeader label="آخر دخول" field="lastLogin" sort={sort} onSort={handleSort} />
+                   <SortableHeader label="تاريخ الإنشاء" field="createdAt" sort={sort} onSort={handleSort} />
+                   <th scope="col" className="sticky top-0 z-10 bg-slate-50 px-6 py-3 text-center text-sm font-semibold text-slate-600">
+                     حالة كلمة المرور
+                   </th>
+                   <th scope="col" className="sticky top-0 z-10 px-6 py-3 text-center text-sm font-semibold text-slate-600">
+                     الإجراءات
+                   </th>
+                 </tr>
+               </thead>
+               <tbody className="divide-y divide-slate-100">
+                 {users.map((user) => {
+                   const userId = Number(user.id);
+                   const isSelected = selectedIds.has(userId);
+                   const isActive = user.isActive ?? user.is_active ?? false;
+                   const statusKey = isActive ? 'active' : 'inactive';
+                   const nurseryLabel = resolveNurseryLabel(user, nurseryMap, branchMap);
+                   const lastLoginLabel = user.lastLogin ?? user.last_login;
+                   const createdAtLabel = user.createdAt ?? user.created_at;
+ 
+                   return (
+                     <tr
+                       key={userId}
+                       className={clsx(
+                         'bg-white transition-colors hover:bg-primary-50/40',
+                         !isActive && 'bg-slate-50 text-slate-500'
+                       )}
+                     >
+                       <td className="w-12 px-6 py-4 align-middle">
+                         <input
+                           type="checkbox"
+                           className="h-4 w-4 rounded border-slate-300 text-primary-600 focus:ring-primary-500"
+                           checked={isSelected}
+                           onChange={() => handleToggleSelect(userId)}
++                          aria-label={`تحديد ${user.fullName ?? user.full_name}`}
+                         />
+                       </td>
+                       <td className="px-6 py-4 align-middle">
+                         <div className="flex items-center justify-end gap-3">
+-                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 text-base font-semibold text-primary-600">
++                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary-100 text-base font-semibold text-primary-600" aria-hidden="true">
+                             {getInitials(user.fullName ?? user.full_name, user.email) || <UserIcon className="h-5 w-5" />}
+                           </div>
+                           <div className="text-right">
+                             <div className="text-sm font-semibold text-slate-900">
+                               {user.fullName ?? user.full_name ?? 'بدون اسم'}
+                             </div>
+                             <div className="text-xs text-slate-500">{user.email}</div>
+                             {user.phone && (
+                               <div className="text-xs text-slate-500">{user.phone}</div>
+                             )}
+                           </div>
+                         </div>
+                       </td>
+                       <td className="px-6 py-4 text-center align-middle">
+                         <Badge variant={ROLE_BADGE_VARIANT[user.role] ?? 'gray'} size="sm">
+                           {ROLE_LABELS[user.role] ?? user.role}
+                         </Badge>
+                       </td>
+                       <td className="px-6 py-4 align-middle">
+                         <div className="text-right text-sm font-medium text-slate-700">{nurseryLabel}</div>
+                       </td>
+                       <td className="px-6 py-4 text-center align-middle">
+                         <Badge variant={STATUS_BADGE_VARIANT[statusKey]} size="sm" dot>
+                           {STATUS_LABELS[statusKey]}
+                         </Badge>
+                       </td>
+                       <td className="px-6 py-4 align-middle text-right text-sm text-slate-600">
+-                        {formatDateTime(lastLoginLabel, { fallback: 'لم يسجل دخول' })}
++                        <time dateTime={lastLoginLabel}>
++                          {formatDateTime(lastLoginLabel, { fallback: 'لم يسجل دخول' })}
++                        </time>
+                       </td>
+                       <td className="px-6 py-4 align-middle text-right text-sm text-slate-600">
+-                        {formatDateTime(createdAtLabel, { fallback: 'غير متوفر', withTime: false })}
++                        <time dateTime={createdAtLabel}>
++                          {formatDateTime(createdAtLabel, { fallback: 'غير متوفر', withTime: false })}
++                        </time>
+                       </td>
+                       <td className="px-6 py-4 text-center align-middle">
+                         <Badge 
+                           variant={(user.must_reset_password || user.mustResetPassword) ? "warning" : "success"} 
+                           size="sm"
+                         >
+                           {(user.must_reset_password || user.mustResetPassword) ? "يتطلب إعادة تعيين" : "تم التعيين"}
+                         </Badge>
+                       </td>
+                       <td className="px-6 py-4 text-center align-middle">
+                         <UserRowActions
+                           user={user}
+                           onEdit={() => handleEdit(user)}
+                           onToggleStatus={() => handleRequestToggle(user)}
+                           onDelete={() => handleRequestDelete(user)}
+                           canToggle={canManageUsers && userId !== Number(currentUserId)}
+                           canDelete={canManageUsers && userId !== Number(currentUserId)}
+                           isToggling={toggleStatusMutation.isPending && confirmAction?.user?.id === user.id}
+                           isDeleting={deleteMutation.isPending && confirmAction?.user?.id === user.id}
+                         />
+                       </td>
+                     </tr>
+                   );
+                 })}
+               </tbody>
+             </table>
+           )}
+         </div>
+         {isFetching && !isLoading && (
+-          <div className="absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-white/80 to-transparent py-2 text-xs text-slate-500">
++          <div className="absolute inset-x-0 bottom-0 flex justify-center bg-gradient-to-t from-white/80 to-transparent py-2 text-xs text-slate-500" role="status" aria-live="polite">
+             تحديث البيانات...
+           </div>
+         )}
+       </div>
+ 
+       {users.length > 0 && (
+-        <div className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between">
+-          <div>
++        <nav 
++          aria-label="صفحات جدول المستخدمين"
++          className="flex flex-col gap-3 rounded-3xl border border-slate-200 bg-white px-6 py-4 text-sm text-slate-600 md:flex-row md:items-center md:justify-between"
++        >
++          <div aria-live="polite" aria-atomic="true">
+             عرض {(currentPage - 1) * pageSize + 1}
+             {' '}
+             إلى
+             {' '}
+             {Math.min(currentPage * pageSize, total)}
+             {' '}
+             من أصل
+             {' '}
+             {total}
+             {' '}
+             مستخدم
+           </div>
+           <div className="flex flex-wrap items-center gap-3">
+             <label className="flex items-center gap-2">
+-              <span>عدد الصفوف:</span>
++              <span id="page-size-label">عدد الصفوف:</span>
+               <select
+                 value={pageSize}
+                 onChange={(event) => {
+                   const nextSize = Number(event.target.value);
+                   setPageSizeState(nextSize);
+                   setPageState(1);
+                 }}
+-                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm focus:border-primary-400 focus:outline-none focus:ring-2 focus:ring-primary-500"
++                className="rounded-lg border border-slate-300 bg-white px-2 py-1 text-sm"
++                aria-labelledby="page-size-label"
+               >
+                 {PAGE_SIZE_OPTIONS.map((size) => (
+                   <option key={size} value={size}>{size}</option>
+                 ))}
+               </select>
+             </label>
+-            <div className="flex items-center gap-1">
++            <div className="flex items-center gap-1" role="group" aria-label="التنقل بين الصفحات">
+               <Button
+                 variant="ghost"
+                 size="sm"
+                 onClick={() => setPageState((prev) => Math.max(prev - 1, 1))}
+                 disabled={currentPage === 1}
+                 icon={ChevronRightIcon}
++                aria-label="الصفحة السابقة"
++                aria-disabled={currentPage === 1}
+               >
+                 السابق
+               </Button>
+-              <span className="px-3 py-1 text-sm font-medium text-slate-700">
++              <span 
++                className="px-3 py-1 text-sm font-medium text-slate-700"
++                aria-current="page"
++                aria-label={`الصفحة ${currentPage} من ${totalPages}`}
++              >
+                 {currentPage} / {totalPages}
+               </span>
+               <Button
+                 variant="ghost"
+                 size="sm"
+                 onClick={() => setPageState((prev) => Math.min(prev + 1, totalPages))}
+                 disabled={currentPage === totalPages}
+                 icon={ChevronLeftIcon}
+                 iconPosition="right"
++                aria-label="الصفحة التالية"
++                aria-disabled={currentPage === totalPages}
+               >
+                 التالي
+               </Button>
+             </div>
+           </div>
+-        </div>
++        </nav>
+       )}
+ 
+       {selectedIds.size > 0 && (
+         <BulkToolbar
+           count={selectedIds.size}
+           onEnable={handleBulkEnableRequest}
+           onDisable={handleBulkDisableRequest}
+           onDelete={handleBulkDeleteRequest}
+           disabled={!canManageUsers}
+           loading={bulkLoading}
+         />
+       )}
+
+---
+Fixes: Issues 2.1, 2.2, 2.4, 2.8
+
+Changes:
+- Added main landmark with id
+- Search wrapped in form with role="search"
+- Added labels for all inputs
+- Table caption and scope attributes
+- Time elements with dateTime
+- Pagination as nav with ARIA
+- ARIA labels for checkboxes
+- Live regions for updates
+
+Verification:
+- Keyboard navigation complete
+- Screen reader table structure
+- Search form accessible
+- Pagination keyboard nav

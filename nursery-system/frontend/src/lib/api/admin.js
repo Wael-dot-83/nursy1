@@ -1,4 +1,4 @@
-import apiClient from '../apiClient';
+import { apiClient, getEndpoint } from '../apiClient';
 
 /**
  * Admin API functions for system analytics and management
@@ -6,13 +6,13 @@ import apiClient from '../apiClient';
 
 // Get comprehensive analytics data for admin dashboard
 export const getAdminAnalytics = async () => {
-  const response = await apiClient.get('/system/analytics');
+  const response = await apiClient.get(getEndpoint('/system/analytics'));
   return response.data;
 };
 
 // Get system health metrics
 export const getSystemHealth = async () => {
-  const response = await apiClient.get('/system/system-health');
+  const response = await apiClient.get(getEndpoint('/system/system-health'));
   return response.data;
 };
 

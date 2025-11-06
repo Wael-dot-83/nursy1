@@ -257,7 +257,7 @@ export default function Reports() {
   const { data: rawNurseries } = useQuery({
     queryKey: ['nurseries'],
     queryFn: async () => {
-      const response = await apiClient.get('/admin/nurseries');
+      const response = await apiClient.get('/api/admin/nurseries');
       return response.data;
     },
   });
@@ -274,7 +274,7 @@ export default function Reports() {
   const { data: analytics } = useQuery({
     queryKey: ['admin-analytics'],
     queryFn: async () => {
-      const response = await apiClient.get('/system/analytics');
+      const response = await apiClient.get('/api/system/analytics');
       return response.data;
     },
   });

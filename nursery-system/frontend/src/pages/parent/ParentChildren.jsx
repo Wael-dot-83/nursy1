@@ -23,14 +23,14 @@ export default function ParentChildren() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['parent-children'],
     queryFn: async () => {
-      const response = await apiClient.get('/parent/children');
+      const response = await apiClient.get('/api/parent/children');
       return response.data;
     },
   });
 
   const createChildMutation = useMutation({
     mutationFn: async (data) => {
-      const response = await apiClient.post('/parent/children', data);
+      const response = await apiClient.post('/api/parent/children', data);
       return response.data;
     },
     onSuccess: () => {

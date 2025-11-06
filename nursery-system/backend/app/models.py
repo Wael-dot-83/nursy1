@@ -1,4 +1,4 @@
-from sqlalchemy.orm import relationship, declarative_base
+﻿from sqlalchemy.orm import relationship, declarative_base
 from sqlalchemy import Column, String, Integer, ForeignKey, Enum, Date, DateTime, Boolean, Text, JSON, DECIMAL, SmallInteger, Index
 from datetime import datetime
 import enum
@@ -9,8 +9,23 @@ Base = declarative_base()
 class RoleEnum(str, enum.Enum):
     ADMIN = "admin"
     MANAGER = "manager"
+    DIRECTOR = "director"
     SUPERVISOR = "supervisor"
     PARENT = "parent"
+
+# Governorate model
+class Governorate(Base):
+    __tablename__ = "governorates"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    name_en = Column(String(50), nullable=False, unique=True)
+    name_ar = Column(String(50), nullable=False)
+    code = Column(String(10), nullable=False, unique=True)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
+
+    # Relationships
+    nurseries = relationship("Nursery", back_populates="governorate")
 
 class AttendanceStatus(str, enum.Enum):
     PRESENT = "present"
@@ -28,6 +43,7 @@ class User(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     email = Column(String(150), nullable=True, unique=True)
+    email_normalized = Column(String(150), nullable=True, unique=True)
     first_name = Column(String(50), nullable=False)
     last_name = Column(String(50), nullable=False)
     phone = Column(String(15), nullable=True)
@@ -35,7 +51,13 @@ class User(Base):
     is_active = Column(Boolean, default=True, nullable=False)
     hashed_password = Column(String(255), nullable=True)
     temp_password = Column(String(255), nullable=True)  # Temporary password for display/management
+    must_reset_password = Column(Boolean, default=False, nullable=False)
     nursery_id = Column(Integer, ForeignKey("nurseries.id"), nullable=True)
+    branch_id = Column(Integer, ForeignKey("branches.id"), nullable=True)
+    last_password_reset = Column(DateTime, nullable=True)
+    password_reset_count = Column(Integer, default=0, nullable=False)
+    account_locked_until = Column(DateTime, nullable=True)
+    failed_login_attempts = Column(Integer, default=0, nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
@@ -47,6 +69,7 @@ class User(Base):
     __table_args__ = (
         Index('idx_users_role', 'role'),
         Index('idx_users_nursery', 'nursery_id'),
+        Index('idx_users_branch', 'branch_id'),
     )
 
 class Nursery(Base):
@@ -54,11 +77,17 @@ class Nursery(Base):
 
     id = Column(Integer, primary_key=True, autoincrement=True)
     name = Column(String(120), nullable=False)
+    name_normalized = Column(String(120), nullable=False)
+    is_branch = Column(Boolean, default=False, nullable=False)
+    branch_name = Column(String(100), nullable=True)
+    branch_normalized = Column(String(100), nullable=False, default="", server_default="")
     main_street = Column(String(200), nullable=True)
     main_city = Column(String(100), nullable=True)
-    main_governorate = Column(String(50), nullable=True)
+    main_governorate = Column(String(50), nullable=True)  # Legacy field, kept for backward compatibility
+    governorate_id = Column(Integer, ForeignKey("governorates.id"), nullable=True)
     main_postal_code = Column(String(10), nullable=True)
     main_phone = Column(String(15), nullable=False)
+    phone_normalized = Column(String(20), nullable=False)
     email = Column(String(150), nullable=True)
     min_age_days = Column(Integer, default=70)  # Default 70 days
     max_age_months = Column(Integer, default=52)  # Default 52 months
@@ -67,10 +96,16 @@ class Nursery(Base):
     created_at = Column(DateTime, default=datetime.utcnow)
     updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
 
+    __table_args__ = (
+        Index('idx_nurseries_name_branch', 'name_normalized', 'branch_normalized', unique=True),
+        Index('idx_nurseries_phone', 'phone_normalized', unique=True),
+    )
+
     # Relationships
     users = relationship("User", back_populates="nursery")
     branches = relationship("Branch", back_populates="nursery")
     children = relationship("Child", back_populates="nursery")
+    governorate = relationship("Governorate", back_populates="nurseries")
 
 class Branch(Base):
     __tablename__ = "branches"
@@ -186,23 +221,10 @@ class FileAsset(Base):
     uploaded_by = Column(Integer, ForeignKey("users.id"), nullable=False)
     created_at = Column(DateTime, default=datetime.utcnow)
 
-class OTPRequest(Base):
-    __tablename__ = "otp_requests"
-
-    id = Column(Integer, primary_key=True, autoincrement=True)
-    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
-    otp_code_hash = Column(String(255), nullable=False)
-    used = Column(Boolean, default=False, nullable=False)
-    expires_at = Column(DateTime, nullable=False)
-    created_at = Column(DateTime, default=datetime.utcnow)
-
-    # Relationships
-    user = relationship("User")
-
-    __table_args__ = (
-        Index('idx_otp_requests_user', 'user_id'),
-        Index('idx_otp_requests_expires', 'expires_at'),
-    )
+# DEPRECATED: OTP authentication feature removed - keeping model for potential future use
+# class OTPRequest(Base):
+#     __tablename__ = "otp_requests"
+#     ...
 
 class RefreshToken(Base):
     __tablename__ = "refresh_tokens"
@@ -282,4 +304,55 @@ class LoginAttempt(Base):
         Index('idx_login_attempts_email', 'email'),
         Index('idx_login_attempts_ip', 'ip_address'),
         Index('idx_login_attempts_attempted_at', 'attempted_at'),
+    )
+
+class PasswordResetOTP(Base):
+    __tablename__ = "password_reset_otps"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    phone = Column(String(15), nullable=False)
+    otp_hash = Column(String(255), nullable=False)
+    expires_at = Column(DateTime, nullable=False)
+    attempts = Column(Integer, default=0)
+    used = Column(Boolean, default=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        Index('idx_phone', 'phone'),
+        Index('idx_expires', 'expires_at'),
+    )
+
+class PasswordResetAttempt(Base):
+    __tablename__ = "password_reset_attempts"
+    
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    phone = Column(String(15), nullable=False)
+    ip_address = Column(String(45), nullable=False)
+    user_agent = Column(Text, nullable=True)
+    success = Column(Boolean, default=False)
+    failure_reason = Column(String(200), nullable=True)
+    attempted_at = Column(DateTime, default=datetime.utcnow)
+    
+    __table_args__ = (
+        Index('idx_phone_attempts', 'phone', 'attempted_at'),
+        Index('idx_ip_attempts', 'ip_address', 'attempted_at'),
+    )
+
+class PasswordResetToken(Base):
+    __tablename__ = "password_reset_tokens"
+
+    id = Column(Integer, primary_key=True, autoincrement=True)
+    user_id = Column(Integer, ForeignKey("users.id"), nullable=False)
+    token_hash = Column(String(255), nullable=False, unique=True)
+    expires_at = Column(DateTime, nullable=False)
+    used = Column(Boolean, default=False, nullable=False)
+    created_at = Column(DateTime, default=datetime.utcnow)
+
+    # Relationships
+    user = relationship("User")
+
+    __table_args__ = (
+        Index('idx_password_reset_tokens_user', 'user_id'),
+        Index('idx_password_reset_tokens_token', 'token_hash'),
+        Index('idx_password_reset_tokens_expires', 'expires_at'),
     )

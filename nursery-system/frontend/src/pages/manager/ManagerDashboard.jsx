@@ -21,7 +21,7 @@ export default function ManagerDashboard() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['manager-dashboard'],
     queryFn: async () => {
-      const response = await apiClient.get('/manager/dashboard');
+      const response = await apiClient.get('/api/manager/dashboard');
       return response.data;
     },
   });
@@ -29,7 +29,7 @@ export default function ManagerDashboard() {
   const { data: nurseryData } = useQuery({
     queryKey: ['manager-nursery'],
     queryFn: async () => {
-      const response = await apiClient.get('/manager/nurseries');
+      const response = await apiClient.get('/api/manager/nurseries');
       return response.data[0]; // Manager manages only one nursery
     },
   });
@@ -37,6 +37,9 @@ export default function ManagerDashboard() {
   const updateNurseryMutation = useMutation({
     mutationFn: async (updateData) => {
       const nurseryId = nurseryData?.id;
+      if (!nurseryId) {
+        throw new Error('Nursery ID is not available.');
+      }
       return apiClient.put(`/manager/nurseries/${nurseryId}`, updateData);
     },
     onSuccess: () => {

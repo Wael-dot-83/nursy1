@@ -1,10 +1,10 @@
-import { apiClient } from '../apiClient';
+import { apiClient, getEndpoint } from '../apiClient';
 
 // User Management API (Admin only)
-export const getUsers = (params) => apiClient.get('/users', { params });
-export const createUser = (data) => apiClient.post('/users', data);
-export const getUser = (id) => apiClient.get(`/users/${id}`);
-export const updateUser = (id, data) => apiClient.put(`/users/${id}`, data);
-export const deleteUser = (id) => apiClient.delete(`/users/${id}`);
-export const activateUser = (id) => apiClient.patch(`/users/${id}/activate`);
-export const deactivateUser = (id) => apiClient.patch(`/users/${id}/deactivate`);
+export const getUsers = (params) => apiClient.get(getEndpoint('/users'), { params });
+export const createUser = (data) => apiClient.post(getEndpoint('/users'), data);
+export const getUser = (id) => apiClient.get(getEndpoint(`/users/${id}`));
+export const updateUser = (id, data) => apiClient.put(getEndpoint(`/users/${id}`), data);
+export const deleteUser = (id) => apiClient.delete(getEndpoint(`/users/${id}`));
+export const activateUser = (id) => apiClient.patch(getEndpoint(`/users/${id}/activate`));
+export const deactivateUser = (id) => apiClient.patch(getEndpoint(`/users/${id}/deactivate`));

@@ -1,0 +1,52 @@
+version: '3.8'
+
+services:
+  # Backend API (Development)
+  backend:
+    build:
+      context: ./nursery-system/backend
+      dockerfile: Dockerfile
+    container_name: nursery_backend_dev
+    restart: unless-stopped
+    environment:
+      DATABASE_URL: sqlite:///./nursery.db
+      JWT_SECRET_KEY: ${JWT_SECRET_KEY}
+      DEBUG: ${DEBUG:-true}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+    volumes:
+      - ./nursery-system/backend:/app
+      - ./storage:/app/storage
+      - ./logs:/app/logs
+    ports:
+      - "8002:8002"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8002/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    networks:
+      - nursery_network
+
+  # Frontend (Development)
+  frontend:
+    build:
+      context: ./nursery-system/frontend
+      dockerfile: Dockerfile.dev
+    container_name: nursery_frontend_dev
+    restart: unless-stopped
+    environment:
+      VITE_API_URL: http://localhost:8002
+    volumes:
+      - ./nursery-system/frontend:/app
+      - /app/node_modules
+    ports:
+      - "5173:5173"
+    depends_on:
+      - backend
+    networks:
+      - nursery_network
+
+networks:
+  nursery_network:
+    driver: bridge

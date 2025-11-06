@@ -45,7 +45,7 @@ const navigationByRole = {
 
 function NavigationContent({ navigation, onLinkClick }) {
   return (
-    <nav className="space-y-2 p-4">
+    <nav className="space-y-2 p-4" aria-label="التنقل الرئيسي">
       {navigation.map((item) => (
         <NavLink
           key={item.to}
@@ -59,6 +59,7 @@ function NavigationContent({ navigation, onLinkClick }) {
                 : 'text-slate-600 hover:bg-primary-50 hover:text-primary-600'
             )
           }
+          aria-current={({ isActive }) => (isActive ? 'page' : undefined)}
         >
           {item.label}
         </NavLink>
@@ -80,6 +81,13 @@ export default function DashboardLayout() {
 
   return (
     <div className="min-h-screen bg-slate-100" dir="rtl">
+      {/* Skip link for keyboard navigation */}
+      <a
+        href="#main-content"
+        className="sr-only focus:not-sr-only focus:absolute focus:top-4 focus:left-4 focus:z-50 focus:rounded-lg focus:bg-primary-600 focus:px-4 focus:py-2 focus:text-white focus:shadow-lg focus:outline-none focus:ring-2 focus:ring-primary-500 focus:ring-offset-2"
+      >
+        تخطي إلى المحتوى الرئيسي
+      </a>
       <Transition.Root show={sidebarOpen} as={Fragment}>
         <Dialog as="div" className="relative z-40 lg:hidden" onClose={setSidebarOpen}>
           <Transition.Child
@@ -158,9 +166,10 @@ export default function DashboardLayout() {
                 type="button"
                 className="inline-flex h-10 w-10 items-center justify-center rounded-full bg-primary-50 text-primary-600 shadow-sm lg:hidden"
                 onClick={() => setSidebarOpen(true)}
-                aria-label="القائمة"
+                aria-label="فتح القائمة الجانبية"
+                aria-expanded={sidebarOpen}
               >
-                <Bars3Icon className="h-6 w-6" />
+                <Bars3Icon className="h-6 w-6" aria-hidden="true" />
               </button>
               <div>
                 <p className="text-xs text-slate-500">مرحبا بك، {user?.full_name || 'مستخدم'}</p>
@@ -171,8 +180,9 @@ export default function DashboardLayout() {
                 type="button"
                 onClick={() => navigate('/parent/notifications')}
                 className="flex h-10 w-10 items-center justify-center rounded-full bg-slate-100 text-slate-500 transition hover:bg-primary-100 hover:text-primary-700"
+                aria-label="الإشعارات"
               >
-                <BellIcon className="h-5 w-5" />
+                <BellIcon className="h-5 w-5" aria-hidden="true" />
               </button>
               <Menu as="div" className="relative inline-block text-left">
                 <Menu.Button className="flex items-center gap-3 rounded-full bg-slate-100 px-3 py-2 text-sm font-medium text-slate-600 hover:bg-slate-200">
@@ -196,7 +206,7 @@ export default function DashboardLayout() {
                             active && 'bg-primary-50 text-primary-700'
                           )}
                         >
-                          <Cog6ToothIcon className="h-4 w-4" />
+                          <Cog6ToothIcon className="h-4 w-4" aria-hidden="true" />
                           الملف الشخصي
                         </button>
                       )}
@@ -214,7 +224,7 @@ export default function DashboardLayout() {
                             active && 'bg-red-50 text-red-600'
                           )}
                         >
-                          <PowerIcon className="h-4 w-4" />
+                          <PowerIcon className="h-4 w-4" aria-hidden="true" />
                           تسجيل الخروج
                         </button>
                       )}
@@ -226,7 +236,7 @@ export default function DashboardLayout() {
           </div>
         </header>
 
-        <main className="flex-1">
+        <main id="main-content" className="flex-1" role="main">
           <div className="mx-auto max-w-6xl p-4 sm:p-6 lg:p-8">
             <div className="min-h-[80vh] space-y-6">
               <Outlet />

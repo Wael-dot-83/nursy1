@@ -1,16 +1,16 @@
-import { apiClient } from '../apiClient';
+import { apiClient, getEndpoint } from '../apiClient';
 
 // Children Management API
-export const getChildren = (params) => apiClient.get('/children', { params });
-export const createChild = (data) => apiClient.post('/children', data);
-export const getChild = (id) => apiClient.get(`/children/${id}`);
-export const updateChild = (id, data) => apiClient.put(`/children/${id}`, data);
-export const deleteChild = (id) => apiClient.delete(`/children/${id}`);
+export const getChildren = (params) => apiClient.get(getEndpoint('/children'), { params });
+export const createChild = (data) => apiClient.post(getEndpoint('/children'), data);
+export const getChild = (id) => apiClient.get(getEndpoint(`/children/${id}`));
+export const updateChild = (id, data) => apiClient.put(getEndpoint(`/children/${id}`), data);
+export const deleteChild = (id) => apiClient.delete(getEndpoint(`/children/${id}`));
 
 // Manager/Supervisor endpoints
-export const getMyNurseryChildren = (params) => apiClient.get('/children/my-nursery', { params });
-export const getMyChildren = () => apiClient.get('/children/my-children');
+export const getMyNurseryChildren = (params) => apiClient.get(getEndpoint('/children/my-nursery'), { params });
+export const getMyChildren = () => apiClient.get(getEndpoint('/children/my-children'));
 
 // Parent endpoints
-export const getParentChildren = () => apiClient.get('/children/parent');
-export const getParentChild = (id) => apiClient.get(`/children/parent/${id}`);
+export const getParentChildren = () => apiClient.get(getEndpoint('/children/parent'));
+export const getParentChild = (id) => apiClient.get(getEndpoint(`/children/parent/${id}`));

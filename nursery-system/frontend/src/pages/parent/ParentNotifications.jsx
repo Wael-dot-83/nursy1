@@ -7,7 +7,7 @@ export default function ParentNotifications() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['parent-notifications'],
     queryFn: async () => {
-      const response = await apiClient.get('/parent/notifications');
+      const response = await apiClient.get('/api/parent/notifications');
       return response.data;
     },
   });
@@ -15,13 +15,13 @@ export default function ParentNotifications() {
   const preferencesQuery = useQuery({
     queryKey: ['notification-preferences'],
     queryFn: async () => {
-      const response = await apiClient.get('/notifications/preferences');
+      const response = await apiClient.get('/api/notifications/preferences');
       return response.data;
     },
   });
 
   const preferencesMutation = useMutation({
-    mutationFn: (preferences) => apiClient.put('/notifications/preferences', { preferences }),
+    mutationFn: (preferences) => apiClient.put('/api/notifications/preferences', { preferences }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['notification-preferences'] });
     },

@@ -17,7 +17,7 @@ export default function ProfilePage() {
     enabled: role === 'parent',
     queryKey: ['parent-profile'],
     queryFn: async () => {
-      const response = await apiClient.get('/parent/profile');
+      const response = await apiClient.get('/api/parent/profile');
       return response.data;
     },
     onSuccess: (data) => {
@@ -47,7 +47,7 @@ export default function ProfilePage() {
 
   const updateProfileMutation = useMutation({
     mutationFn: async () => {
-      const response = await apiClient.put('/parent/profile', profileForm);
+      const response = await apiClient.put('/api/parent/profile', profileForm);
       return response.data;
     },
     onSuccess: (updatedProfile) => {

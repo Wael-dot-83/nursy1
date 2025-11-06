@@ -1,8 +1,8 @@
-# Nursery Management System - Jordan
+﻿# Nursery Management System - Jordan
 
 A comprehensive web-based childcare management system designed for Jordanian nurseries, built with modern technologies and Arabic language support.
 
-## 📖 Documentation
+## ðŸ“– Documentation
 
 **Complete documentation is now available:**
 
@@ -15,13 +15,13 @@ A comprehensive web-based childcare management system designed for Jordanian nur
 - **[Parent Guide](PARENT_GUIDE.md)** - Parent user guide
 
 **Quick Links:**
-- 🚀 [Quick Start](#quick-start) - Get started in 5 minutes
-- 🌐 [**Deploy for End Users**](DEPLOYMENT_INSTRUCTIONS.md) - **Make your app accessible online (Free options!)**
-- 🐳 [Docker Setup](DEPLOYMENT_GUIDE.md#docker-deployment) - One-command deployment
-- 📚 [API Docs](http://localhost:8000/docs) - Interactive API documentation (when running)
-- 🔧 [Troubleshooting](#-troubleshooting) - Common issues and solutions
+- ðŸš€ [Quick Start](#quick-start) - Get started in 5 minutes
+- ðŸŒ [**Deploy for End Users**](DEPLOYMENT_INSTRUCTIONS.md) - **Make your app accessible online (Free options!)**
+- ðŸ³ [Docker Setup](DEPLOYMENT_GUIDE.md#docker-deployment) - One-command deployment
+- ðŸ“š [API Docs](http://localhost:8000/docs) - Interactive API documentation (when running)
+- ðŸ”§ [Troubleshooting](#-troubleshooting) - Common issues and solutions
 
-## 🌟 Features
+## ðŸŒŸ Features
 
 ### Core Functionality
 - **Multi-Role User Management**: Admin, Manager, Supervisor, and Parent roles
@@ -46,24 +46,24 @@ A comprehensive web-based childcare management system designed for Jordanian nur
 - **File Upload**: Secure document management with validation
 - **Notification System**: In-app notifications with SMS/email integration
 
-## 🆕 Recent Updates
+## ðŸ†• Recent Updates
 
 ### Version 1.0.0 - Production Ready Release
 
-**New Documentation** 📚
+**New Documentation** ðŸ“š
 - Complete API documentation with examples for all endpoints
 - Comprehensive deployment guide for AWS, Heroku, and Docker
 - Step-by-step setup guide for Windows, macOS, and Linux
 - User guides for all roles (Admin, Manager, Parent, Supervisor)
 
-**DevOps & Deployment** 🚀
+**DevOps & Deployment** ðŸš€
 - Production-ready Docker containers with multi-stage builds
 - Docker Compose orchestration with PostgreSQL and Redis
 - GitHub Actions CI/CD pipeline with automated testing and deployment
 - Nginx configuration with security headers and caching
 - Automated security scanning with Trivy
 
-**Enhanced Features** ✨
+**Enhanced Features** âœ¨
 - Enhanced Security: JWT refresh tokens, improved OTP system
 - Rate Limiting: Configurable API rate limits with SlowAPI
 - Audit Logging: Complete activity tracking for compliance
@@ -162,15 +162,15 @@ docker run --rm -p 80:80 nursery-frontend
 ```
 
 ### Demo Accounts
-- **Admin** � admin@nursery.com / admin123
-- **Manager** � manager@nursery.com / manager123
-- **Supervisor** � supervisor@nursery.com / supervisor123
-- **Parent** � parent@nursery.com / parent123
+- **Admin** ï¿½ admin@nursery.com / admin123
+- **Manager** ï¿½ manager@nursery.com / manager123
+- **Supervisor** ï¿½ supervisor@nursery.com / supervisor123
+- **Parent** ï¿½ parent@nursery.com / parent123
 
 After the backend and frontend are running you can sign in with any of the
 credentials above and start exploring the dashboards seeded with demo data.
 
-## 🔐 Default Credentials
+## ðŸ” Default Credentials
 
 ### Administrator Account
 - **Phone**: 0790000000
@@ -180,33 +180,33 @@ credentials above and start exploring the dashboards seeded with demo data.
 ### Testing Accounts
 Create additional test accounts through the admin panel or API.
 
-## 📱 User Roles & Permissions
+## ðŸ“± User Roles & Permissions
 
-### 👑 Administrator
+### ðŸ‘‘ Administrator
 - Full system access
 - User and nursery management
 - System configuration
 - Audit logs and reports
 
-### 👨‍💼 Manager
+### ðŸ‘¨â€ðŸ’¼ Manager
 - Nursery-specific management
 - Staff supervision
 - Report approval
 - Child enrollment oversight
 
-### 👩‍🏫 Supervisor
+### ðŸ‘©â€ðŸ« Supervisor
 - Daily operations
 - Child activity logging
 - Attendance management
 - Parent communication
 
-### 👨‍👩‍👧‍👦 Parent
+### ðŸ‘¨â€ðŸ‘©â€ðŸ‘§â€ðŸ‘¦ Parent
 - Child information access
 - Daily reports viewing
 - Appointment scheduling
 - Staff communication
 
-## 🛠 API Documentation
+## ðŸ›  API Documentation
 
 ### Base URL
 - **Development**: `http://localhost:8000`
@@ -274,7 +274,7 @@ GET  /audit-logs           # List audit logs
 - **ReDoc**: `http://localhost:8000/redoc`
 - **OpenAPI JSON**: `http://localhost:8000/openapi.json`
 
-## 🗄 Database Schema
+## ðŸ—„ Database Schema
 
 ### Core Tables
 - **users**: System users with roles (admin, manager, supervisor, parent)
@@ -292,15 +292,15 @@ GET  /audit-logs           # List audit logs
 
 ### Relationships
 ```
-Nursery (1) ──── (M) Branch
-    │                   │
-    ├─── (M) User       ├─── (M) Classroom
-    │                   │
-    └─── (M) Child      └─── (M) Child
-                        │
-                        ├─── (M) Attendance
-                        │
-                        └─── (M) DailyReport
+Nursery (1) â”€â”€â”€â”€ (M) Branch
+    â”‚                   â”‚
+    â”œâ”€â”€â”€ (M) User       â”œâ”€â”€â”€ (M) Classroom
+    â”‚                   â”‚
+    â””â”€â”€â”€ (M) Child      â””â”€â”€â”€ (M) Child
+                        â”‚
+                        â”œâ”€â”€â”€ (M) Attendance
+                        â”‚
+                        â””â”€â”€â”€ (M) DailyReport
 ```
 
 ### Key Indexes
@@ -310,7 +310,7 @@ Nursery (1) ──── (M) Branch
 - Audit logs by user, action, and resource
 - OTP and refresh token expiration tracking
 
-## ⚙ Configuration
+## âš™ Configuration
 
 ### Environment Variables
 
@@ -362,7 +362,7 @@ RATE_LIMIT_PER_MINUTE=60
 AUTH_RATE_LIMIT_PER_MINUTE=5
 ```
 
-## 🧪 Testing
+## ðŸ§ª Testing
 
 ### Running Tests
 ```bash
@@ -381,15 +381,15 @@ python -m pytest tests/test_auth.py -v
 ### Test Structure
 ```
 tests/
-├── __init__.py
-├── conftest.py           # Test configuration
-├── test_auth.py          # Authentication tests
-├── test_models.py        # Database model tests
-├── test_api.py           # API endpoint tests
-└── test_integration.py   # Integration tests
+â”œâ”€â”€ __init__.py
+â”œâ”€â”€ conftest.py           # Test configuration
+â”œâ”€â”€ test_auth.py          # Authentication tests
+â”œâ”€â”€ test_models.py        # Database model tests
+â”œâ”€â”€ test_api.py           # API endpoint tests
+â””â”€â”€ test_integration.py   # Integration tests
 ```
 
-## 🚀 Deployment
+## ðŸš€ Deployment
 
 ### Docker Deployment
 ```dockerfile
@@ -422,7 +422,7 @@ CMD ["npm", "run", "preview"]
 - [ ] Backup automation configured
 - [ ] Security headers enabled
 
-## 📊 Monitoring & Maintenance
+## ðŸ“Š Monitoring & Maintenance
 
 ### Health Checks
 - **Application Health**: `GET /healthz`
@@ -443,7 +443,7 @@ mysqldump nurserydb > backup_$(date +%Y%m%d).sql
 tar -czf uploads_backup_$(date +%Y%m%d).tar.gz uploads/
 ```
 
-## 🔒 Security Features
+## ðŸ”’ Security Features
 
 ### Authentication & Authorization
 - JWT token-based authentication with access and refresh tokens
@@ -467,7 +467,7 @@ tar -czf uploads_backup_$(date +%Y%m%d).tar.gz uploads/
 - GDPR-compliant data handling practices
 - Secure OTP and token management with expiration
 
-## 🐛 Troubleshooting
+## ðŸ› Troubleshooting
 
 ### Common Issues
 
@@ -544,7 +544,7 @@ export DEBUG=true
 python run.py
 ```
 
-## 📚 Documentation
+## ðŸ“š Documentation
 
 ### User Guides
 - **[Developer Guide](DEVELOPER_GUIDE.md)**: Technical documentation
@@ -556,7 +556,7 @@ python run.py
 - **Alternative Docs**: `/redoc`
 - **OpenAPI Specification**: `/openapi.json`
 
-## 🤝 Contributing
+## ðŸ¤ Contributing
 
 ### Development Workflow
 1. Fork the repository
@@ -584,11 +584,11 @@ alembic upgrade head
 alembic downgrade -1
 ```
 
-## 📄 License
+## ðŸ“„ License
 
 This project is proprietary software. All rights reserved.
 
-## 🆘 Support
+## ðŸ†˜ Support
 
 ### Getting Help
 - **Documentation**: Check the guides in `/docs`
@@ -603,7 +603,19 @@ This project is proprietary software. All rights reserved.
 
 ---
 
-**Built with ❤️ for Jordanian childcare facilities**
+**Built with â¤ï¸ for Jordanian childcare facilities**
 
 *Ensuring the best care for our children through technology*
+
+
+
+### Manager Email Convention
+
+When admins create nurseries, the system automatically provisions a director account:
+
+- Main nurseries use `manager_4@<slug(nursery-name)>.com`.
+- Branch nurseries use `manager_4@<slug(nursery-name)>-<slug(branch-name)>.com`.
+- If the generated email already exists, a numeric suffix (e.g., `-2`, `-3`) is appended before `.com`.
+- Slugs are normalised with Arabic-to-Latin transliteration, lowercase letters, and hyphen separators.
+
 

@@ -24,7 +24,7 @@ export default function ManagerReports() {
   const { data, isLoading, isError, error } = useQuery({
     queryKey: ['manager-reports', status],
     queryFn: async () => {
-      const response = await apiClient.get('/manager/reports', {
+      const response = await apiClient.get('/api/manager/reports', {
         params: { status },
       });
       return response.data;
@@ -32,21 +32,21 @@ export default function ManagerReports() {
   });
 
   const approveMutation = useMutation({
-    mutationFn: ({ id, managerNotes }) => apiClient.put(`/manager/reports/${id}/approve`, { managerNotes }),
+    mutationFn: ({ id }) => apiClient.put(`/api/manager/reports/${id}/approve`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-reports'] });
     },
   });
 
   const reviseMutation = useMutation({
-    mutationFn: ({ id, managerNotes }) => apiClient.put(`/manager/reports/${id}/revise`, { managerNotes }),
+    mutationFn: ({ id, managerNotes }) => apiClient.put(`/api/manager/reports/${id}/revise`, { managerNotes }),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-reports'] });
     },
   });
 
   const updateMutation = useMutation({
-    mutationFn: ({ id, data }) => apiClient.put(`/manager/reports/${id}`, data),
+    mutationFn: ({ id, data }) => apiClient.put(`/api/manager/reports/${id}`, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['manager-reports'] });
       setEditingReport(null);
@@ -221,7 +221,7 @@ export default function ManagerReports() {
                     onClick={() => {
                       const managerNotes = window.prompt('أدخل ملاحظات لطلب التعديل:', report.managerNotes || '');
                       if (managerNotes !== null) {
-                        reviseMutation.mutate({ id: report.id, managerNotes: managerNotes || undefined });
+                        reviseMutation.mutate({ id: report.id, managerNotes });
                       }
                     }}
                     className="rounded-full border border-primary-600 px-4 py-2 text-sm font-medium text-primary-600 hover:bg-primary-50"

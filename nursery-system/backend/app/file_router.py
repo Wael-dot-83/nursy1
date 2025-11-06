@@ -16,6 +16,7 @@ from .models import FileAsset, User
 from .schemas import FileAssetResponse, BaseResponse
 from .settings import settings
 from .audit_helper import log_create, log_delete
+from .middleware import file_upload_limiter
 import logging
 
 logger = logging.getLogger(__name__)
@@ -82,6 +83,7 @@ def save_upload_file(file: UploadFile, user_id: int) -> dict:
 
 
 @router.post("/upload", response_model=FileAssetResponse)
+@file_upload_limiter.limit("10/minute")
 async def upload_file(
     file: UploadFile = File(...),
     description: Optional[str] = Form(None),

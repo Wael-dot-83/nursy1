@@ -1,16 +1,57 @@
 import axios from 'axios';
 
-// Use relative URL in development (proxied by Vite) or VITE_API_URL in production
-const API_BASE = import.meta.env.VITE_API_URL
-  ? import.meta.env.VITE_API_URL.replace(/\/$/, '')
-  : ''; // Empty string means requests go to same origin (proxied by Vite in dev)
+const LOCAL_HOSTNAMES = new Set(['localhost', '127.0.0.1', '0.0.0.0']);
+const rawConfiguredBase = (import.meta.env.VITE_API_URL || '').trim();
+let API_BASE = rawConfiguredBase ? rawConfiguredBase.replace(/\/$/, '') : '';
+
+if (API_BASE && typeof window !== 'undefined') {
+  try {
+    const configuredUrl = new URL(API_BASE);
+    const pathSuffix = configuredUrl.pathname === '/' ? '' : configuredUrl.pathname.replace(/\/$/, '');
+    const currentHostname = window.location.hostname;
+    const configuredHost = configuredUrl.hostname.toLowerCase();
+    const currentHostLower = currentHostname ? currentHostname.toLowerCase() : '';
+
+    if (
+      currentHostname &&
+      LOCAL_HOSTNAMES.has(configuredHost) &&
+      !LOCAL_HOSTNAMES.has(currentHostLower)
+    ) {
+      const port = configuredUrl.port ? `:${configuredUrl.port}` : '';
+      API_BASE = `${configuredUrl.protocol}//${currentHostname}${port}${pathSuffix}`;
+    } else {
+      API_BASE = `${configuredUrl.protocol}//${configuredUrl.host}${pathSuffix}`;
+    }
+  } catch (error) {
+    // Invalid VITE_API_URL, fall back to same-origin proxy usage.
+    console.warn('[apiClient] Invalid VITE_API_URL; falling back to same-origin requests.', error);
+    API_BASE = '';
+  }
+}
+
+export const API_BASE_URL = API_BASE;
+
+// Helper to get correct endpoint path
+// When VITE_API_URL is set (direct connection), don't use /api prefix
+// When using proxy (no VITE_API_URL), use /api prefix
+export function getEndpoint(path) {
+  if (import.meta.env.VITE_API_URL) {
+    // Direct connection to backend - no /api prefix needed
+    return path;
+  }
+  // Using Vite proxy - add /api prefix if not already present
+  return path.startsWith('/api') ? path : `/api${path}`;
+}
 
 export const apiClient = axios.create({
   baseURL: API_BASE,
   headers: {
-    'Content-Type': 'application/json',
+    'Content-Type': 'application/json; charset=utf-8',
+    'Accept': 'application/json; charset=utf-8',
   },
-  withCredentials: true, // Always send cookies (for httpOnly refresh token)
+  withCredentials: true,
+  responseType: 'json',
+  responseEncoding: 'utf8',
 });
 
 // Default export for easier imports
@@ -50,8 +91,12 @@ apiClient.interceptors.response.use(
   async (error) => {
     const originalRequest = error.config;
 
-    // If 401 error and we haven't retried yet
-    if (error.response?.status === 401 && !originalRequest._retry) {
+    // Don't retry if this is already a refresh or login request (prevents infinite loop)
+    const isRefreshRequest = originalRequest.url?.includes(getEndpoint('/auth/refresh'));
+    const isLoginRequest = originalRequest.url?.includes(getEndpoint('/auth/login'));
+
+    // If 401 error and we haven't retried yet and it's not a refresh/login request
+    if (error.response?.status === 401 && !originalRequest._retry && !isRefreshRequest && !isLoginRequest) {
       originalRequest._retry = true;
 
       try {
@@ -77,22 +122,36 @@ apiClient.interceptors.response.use(
   }
 );
 
-export function handleApiError(error) {
+export function handleApiError(error, t = null) {
+  // If translation function is provided, use it
+  const translate = t || ((key) => {
+    const fallbacks = {
+      'error.unauthorized': 'اسم المستخدم أو كلمة المرور غير صحيحة. الرجاء المحاولة مرة أخرى.',
+      'error.forbidden': 'ليس لديك صلاحية للوصول إلى هذا المورد.',
+      'error.not_found': 'الصفحة أو المورد المطلوب غير موجود.',
+      'error.rate_limit': 'تم تجاوز الحد الأقصى من المحاولات. الرجاء المحاولة لاحقاً.',
+      'error.server': 'حدث خطأ في الخادم. الرجاء المحاولة لاحقاً.',
+      'error.network': 'فشل في الاتصال بالخادم. تحقق من اتصال الإنترنت.',
+      'error.unexpected': 'حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.',
+    };
+    return fallbacks[key] || key;
+  });
+
   // Handle specific HTTP status codes with localized messages
   if (error.response?.status === 401) {
-    return 'اسم المستخدم أو كلمة المرور غير صحيحة. الرجاء المحاولة مرة أخرى.';
+    return translate('error.unauthorized');
   }
   if (error.response?.status === 403) {
-    return 'ليس لديك صلاحية للوصول إلى هذا المورد.';
+    return translate('error.forbidden');
   }
   if (error.response?.status === 404) {
-    return 'الصفحة أو المورد المطلوب غير موجود.';
+    return translate('error.not_found');
   }
   if (error.response?.status === 429) {
-    return 'تم تجاوز الحد الأقصى من المحاولات. الرجاء المحاولة لاحقاً.';
+    return translate('error.rate_limit');
   }
   if (error.response?.status === 500) {
-    return 'حدث خطأ في الخادم. الرجاء المحاولة لاحقاً.';
+    return translate('error.server');
   }
 
   // Check for backend-provided messages
@@ -130,10 +189,36 @@ export function handleApiError(error) {
 
   // Fallback for network errors or unknown issues
   if (!error.response) {
-    return 'فشل في الاتصال بالخادم. تحقق من اتصال الإنترنت.';
+    // Network error - no response from server
+    const baseURL = error.config?.baseURL || window.location.origin;
+    return translate('error.network') + ` (${baseURL})`;
   }
 
-  return 'حدث خطأ غير متوقع. الرجاء المحاولة مرة أخرى.';
+  return translate('error.unexpected');
+}
+
+/**
+ * Check if backend server is reachable
+ */
+export async function checkBackendHealth() {
+  try {
+    const healthTimeout =
+      Number(import.meta.env.VITE_HEALTH_TIMEOUT) || 10000; // Default to 10 seconds
+    const response = await apiClient.get(getEndpoint('/health'), {
+      timeout: healthTimeout,
+    });
+    return response.status === 200;
+  } catch (err) {
+    console.error('Backend health check failed:', err);
+    console.error('Error details:', {
+      message: err.message,
+      code: err.code,
+      response: err.response?.status,
+      url: err.config?.url,
+      baseURL: err.config?.baseURL
+    });
+    return false;
+  }
 }
 
 export function extractErrorMessage(error) {

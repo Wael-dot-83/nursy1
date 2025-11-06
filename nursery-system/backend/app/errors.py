@@ -4,6 +4,7 @@ Centralised error handling utilities to provide structured responses.
 from __future__ import annotations
 
 import logging
+from datetime import datetime
 from typing import Any, Dict, Optional
 
 from fastapi import FastAPI, Request
@@ -13,6 +14,16 @@ from starlette import status
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 logger = logging.getLogger(__name__)
+
+
+def _normalise_error_detail(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _normalise_error_detail(val) for key, val in value.items()}
+    if isinstance(value, list):
+        return [_normalise_error_detail(item) for item in value]
+    if isinstance(value, Exception):
+        return str(value)
+    return value
 
 
 def _build_error_payload(
@@ -31,7 +42,7 @@ def _build_error_payload(
         "requestId": request_id,
     }
     if details:
-        payload["error"]["details"] = details
+        payload["error"]["details"] = _normalise_error_detail(details)
     return payload
 
 
@@ -134,8 +145,28 @@ async def generic_exception_handler(
     )
 
 
+async def app_exception_handler(request: Request, exc: Exception):
+    """Handler for custom AppException errors."""
+    from .exceptions import AppException
+    
+    if isinstance(exc, AppException):
+        return JSONResponse(
+            status_code=exc.status_code,
+            content={
+                "detail": exc.message,
+                "errors": exc.details,
+                "timestamp": datetime.utcnow().isoformat(),
+                "path": str(request.url),
+            }
+        )
+    raise exc
+
+
 def register_exception_handlers(app: FastAPI) -> None:
     """Attach the structured error handlers to the FastAPI application."""
+    from .exceptions import AppException
+    
+    app.add_exception_handler(AppException, app_exception_handler)
     app.add_exception_handler(StarletteHTTPException, http_exception_handler)
     app.add_exception_handler(RequestValidationError, validation_exception_handler)
     app.add_exception_handler(Exception, generic_exception_handler)

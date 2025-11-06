@@ -13,7 +13,7 @@ from .audit_helper import log_create, log_update, log_delete
 
 router = APIRouter()
 
-@router.get("/", response_model=List[dict])
+@router.get("", response_model=List[dict])
 async def get_users(
     skip: int = 0,
     limit: int = 100,
@@ -52,7 +52,7 @@ async def get_users(
         for user in users
     ]
 
-@router.post("/", response_model=dict)
+@router.post("", response_model=dict)
 async def create_user(
     user_data: dict,
     request: Request,

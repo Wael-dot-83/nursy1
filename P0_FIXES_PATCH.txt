@@ -1,0 +1,100 @@
+# P0 Critical Fixes - Apply These Changes
+
+## File: nursery-system/frontend/src/pages/admin/UserManagement.jsx
+
+### Change 1: Add semantic landmark (Line 976)
+FIND:
+  return (
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold text-slate-900">إدارة المستخدمين والصلاحيات</h1>
+
+REPLACE WITH:
+  return (
+    <main aria-labelledby="user-management-title">
+      <div className="space-y-6">
+        <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
+          <div>
+            <h1 id="user-management-title" className="text-2xl font-bold text-slate-900">إدارة المستخدمين والصلاحيات</h1>
+
+### Change 2: Close main tag (Last line before closing brace)
+FIND:
+      )}
+    </div>
+  );
+}
+
+REPLACE WITH:
+      )}
+      </div>
+    </main>
+  );
+}
+
+### Change 3: Change password column header (Line 1034)
+FIND:
+                  <th scope="col" className="sticky top-0 z-10 bg-slate-50 px-6 py-3 text-center text-sm font-semibold text-slate-600">
+                    كلمة المرور
+                  </th>
+
+REPLACE WITH:
+                  <th scope="col" className="sticky top-0 z-10 bg-slate-50 px-6 py-3 text-center text-sm font-semibold text-slate-600">
+                    حالة كلمة المرور
+                  </th>
+
+### Change 4: Replace password cell content (Lines 1088-1104)
+FIND:
+                      <td className="px-6 py-4 text-center align-middle">
+                        {user.tempPassword ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <span className="font-mono text-xs text-slate-700">
+                              {visiblePasswords.has(userId) ? user.tempPassword : '••••••••'}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVisiblePasswords((prev) => {
+                                  const next = new Set(prev);
+                                  if (next.has(userId)) {
+                                    next.delete(userId);
+                                  } else {
+                                    next.add(userId);
+                                  }
+                                  return next;
+                                });
+                              }}
+                              className="rounded p-1 text-slate-400 transition hover:bg-slate-100 hover:text-primary-600"
+                              title={visiblePasswords.has(userId) ? 'إخفاء كلمة المرور' : 'إظهار كلمة المرور'}
+                            >
+                              {visiblePasswords.has(userId) ? (
+                                <EyeSlashIcon className="h-4 w-4" />
+                              ) : (
+                                <EyeIcon className="h-4 w-4" />
+                              )}
+                            </button>
+                          </div>
+                        ) : (
+                          <span className="text-xs text-slate-400">غير متوفر</span>
+                        )}
+                      </td>
+
+REPLACE WITH:
+                      <td className="px-6 py-4 text-center align-middle">
+                        <Badge 
+                          variant={(user.must_reset_password || user.mustResetPassword) ? "warning" : "success"} 
+                          size="sm"
+                        >
+                          {(user.must_reset_password || user.mustResetPassword) ? "يتطلب إعادة تعيين" : "تم التعيين"}
+                        </Badge>
+                      </td>
+
+---
+
+## Summary of Changes:
+1. ✅ Wrapped component in <main> with aria-labelledby
+2. ✅ Added id to h1 for landmark association
+3. ✅ Changed password column header to "حالة كلمة المرور"
+4. ✅ Replaced password display with status badge (SECURITY FIX)
+
+## Apply manually or use find/replace in your editor.
