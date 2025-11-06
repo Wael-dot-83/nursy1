@@ -1,0 +1,83 @@
+{{
+
+  "root": true,  "env": {
+
+  "env": {    "browser": true,
+
+    "browser": true,    "es2021": true
+
+    "es2021": true,  },
+
+    "node": true  "extends": [
+
+  },    "eslint:recommended",
+
+  "extends": [    "plugin:react/recommended",
+
+    "eslint:recommended",    "plugin:react/jsx-runtime",
+
+    "plugin:react/recommended",    "plugin:react-hooks/recommended"
+
+    "plugin:react/jsx-runtime",  ],
+
+    "plugin:react-hooks/recommended"  "parserOptions": {
+
+  ],    "ecmaVersion": "latest",
+
+  "parserOptions": {    "sourceType": "module",
+
+    "ecmaVersion": "latest",    "ecmaFeatures": {
+
+    "sourceType": "module",      "jsx": true
+
+    "ecmaFeatures": {    }
+
+      "jsx": true  },
+
+    }  "settings": {
+
+  },    "react": {
+
+  "plugins": [      "version": "detect"
+
+    "react",    }
+
+    "react-hooks",  },
+
+    "react-refresh"  "plugins": [
+
+  ],    "react",
+
+  "settings": {    "react-hooks",
+
+    "react": {    "react-refresh"
+
+      "version": "detect"  ],
+
+    }  "rules": {
+
+  },    "react/prop-types": "off",
+
+  "rules": {    "react/react-in-jsx-scope": "off",
+
+    "react-refresh/only-export-components": [    "react-refresh/only-export-components": "warn",
+
+      "warn",    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }],
+
+      { "allowConstantExport": true }    "no-console": ["warn", { "allow": ["warn", "error"] }],
+
+    ],    "prefer-const": "warn",
+
+    "react/prop-types": "off",    "no-var": "error"
+
+    "no-unused-vars": ["warn", { "argsIgnorePattern": "^_" }]  },
+
+  }  "ignorePatterns": [
+
+}    "dist",
+
+    "build",
+    "node_modules",
+    "*.config.js"
+  ]
+}
