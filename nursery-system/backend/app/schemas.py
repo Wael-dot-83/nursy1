@@ -1,7 +1,7 @@
 from pydantic import BaseModel, EmailStr, Field, field_validator
 from typing import Optional, List, Dict, Any
 from datetime import datetime, date, time
-from .models import RoleEnum, AttendanceStatus, ChildStatus
+from .models import RoleEnum, AttendanceStatus, ChildStatus, ReportStatus
 
 # Base schemas
 class BaseResponse(BaseModel):
@@ -46,7 +46,8 @@ class PasswordChangeRequest(BaseModel):
 
 # User schemas
 class UserBase(BaseModel):
-    email: EmailStr
+    email: Optional[EmailStr] = None
+    username: Optional[str] = Field(None, min_length=3, max_length=100)
     first_name: str = Field(..., min_length=1, max_length=50)
     last_name: str = Field(..., min_length=1, max_length=50)
     phone: Optional[str] = Field(None, min_length=10, max_length=15)
@@ -64,6 +65,7 @@ class UserUpdate(BaseModel):
 
 class UserResponse(UserBase):
     id: int
+    username: Optional[str]
     nursery_id: Optional[int]
     is_active: bool
     created_at: datetime
@@ -157,23 +159,50 @@ class ClassroomResponse(ClassroomBase):
 # Child schemas
 class ChildBase(BaseModel):
     first_name: str = Field(..., min_length=1, max_length=50)
+    second_name: Optional[str] = Field(None, min_length=1, max_length=50)
     last_name: str = Field(..., min_length=1, max_length=50)
     date_of_birth: date
     gender: str = Field(..., pattern="^(male|female|other)$")
+    nationality: Optional[str] = Field(None, max_length=100)
+    national_id: Optional[str] = Field(None, max_length=50)
+    passport_no: Optional[str] = Field(None, max_length=50)
     medical_info: Optional[str] = None
     emergency_contact: str = Field(..., min_length=1, max_length=100)
     emergency_phone: str = Field(..., min_length=10, max_length=15)
     classroom_id: int
     parent_id: int
+    
+    @field_validator('national_id', 'passport_no')
+    @classmethod
+    def validate_id_documents(cls, v, info):
+        nationality = info.data.get('nationality')
+        field_name = info.field_name
+        
+        if nationality == 'Jordan':
+            if field_name == 'national_id' and not v:
+                raise ValueError('National ID is required for Jordanian nationals')
+            if field_name == 'passport_no' and v:
+                raise ValueError('Passport number must be empty for Jordanian nationals')
+        elif nationality and nationality != 'Jordan':
+            if field_name == 'passport_no' and not v:
+                raise ValueError('Passport number is required for non-Jordanian nationals')
+            if field_name == 'national_id' and v:
+                raise ValueError('National ID must be empty for non-Jordanian nationals')
+        
+        return v
 
 class ChildCreate(ChildBase):
     pass
 
 class ChildUpdate(BaseModel):
     first_name: Optional[str] = Field(None, min_length=1, max_length=50)
+    second_name: Optional[str] = Field(None, min_length=1, max_length=50)
     last_name: Optional[str] = Field(None, min_length=1, max_length=50)
     date_of_birth: Optional[date] = None
     gender: Optional[str] = Field(None, pattern="^(male|female|other)$")
+    nationality: Optional[str] = Field(None, max_length=100)
+    national_id: Optional[str] = Field(None, max_length=50)
+    passport_no: Optional[str] = Field(None, max_length=50)
     medical_info: Optional[str] = None
     emergency_contact: Optional[str] = Field(None, min_length=1, max_length=100)
     emergency_phone: Optional[str] = Field(None, min_length=10, max_length=15)
@@ -182,6 +211,10 @@ class ChildUpdate(BaseModel):
 
 class ChildResponse(ChildBase):
     id: int
+    second_name: Optional[str]
+    nationality: Optional[str]
+    national_id: Optional[str]
+    passport_no: Optional[str]
     status: ChildStatus
     created_at: datetime
     updated_at: datetime
@@ -225,6 +258,8 @@ class DailyReportBase(BaseModel):
     naps: Optional[str] = None
     mood: Optional[str] = Field(None, pattern="^(happy|sad|excited|tired|calm)$")
     notes: Optional[str] = None
+    status: Optional[ReportStatus] = ReportStatus.PENDING
+    manager_feedback: Optional[str] = None
 
 class DailyReportCreate(DailyReportBase):
     pass
@@ -235,9 +270,15 @@ class DailyReportUpdate(BaseModel):
     naps: Optional[str] = None
     mood: Optional[str] = Field(None, pattern="^(happy|sad|excited|tired|calm)$")
     notes: Optional[str] = None
+    status: Optional[ReportStatus] = None
+    manager_feedback: Optional[str] = None
 
 class DailyReportResponse(DailyReportBase):
     id: int
+    status: ReportStatus
+    manager_feedback: Optional[str]
+    reviewed_by: Optional[int]
+    reviewed_at: Optional[datetime]
     created_at: datetime
     updated_at: datetime
 
